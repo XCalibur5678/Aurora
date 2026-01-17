@@ -1,6 +1,6 @@
 # Aurora
 
-**Aurora** is a simple, opinionated CLI tool for installing AUR packages on Arch Linux.
+**Aurora** is a simple, opinionated CLI tool for installing AUR packages on Arch Linux or Arch Linux based distros like Manjaro , Garuda Linux etc.
 
 It exists for one reason: **to make AUR usage understandable, not magical.**
 
@@ -33,11 +33,11 @@ Every action is explained before it happens.
 * Package sources are clearly identified.
 * Nothing installs silently.
 
-> If aurora is about to change your system, you will know exactly **how** and **why**.
+> If Aurora is about to change your system, you will know exactly **how** and **why**.
 
 ### 2. Human-Readable Commands
 
-aurora uses words, not flags. You should not need to memorize abbreviations to manage your software.
+Aurora uses words, not flags. You should not need to memorize abbreviations to manage your software.
 
 ```bash
 aurora install discord
@@ -64,7 +64,7 @@ Aurora is opinionated by design to protect the system:
 
 ### 5. Pacman Does the Real Work
 
-Aurora does not replace `pacman`; it orchestrates it. All system changes are ultimately handled by `pacman` and `makepkg`. Aurora exists to make those tools usable, not to reinvent them.
+Aurora does not replace `pacman`; it orchestrates it. All system changes are ultimately handled by `pacman` and `makepkg`. Aurora exists to make those tools user friendly, not to reinvent them.
 
 ---
 
@@ -86,3 +86,112 @@ Aurora is a **learning-focused, community-driven project**.
 * **Expect clarity.**
 
 ---
+Good instinct. A **CONTRIBUTING section is a quiet flex** — most student projects skip it, and interviewers notice.
+
+I’ll give you a **contributing section that matches aurora’s philosophy**: strict, welcoming, and not naïve.
+
+You want three things simultaneously:
+
+1. Encourage contributions
+2. Filter low-effort noise
+3. Set technical standards without sounding arrogant
+
+Here’s a **ready-to-paste** section. Don’t edit it unless you’re very sure.
+
+---
+
+## Contributing
+
+Aurora is an opinionated project.  
+Contributions are welcome, but not everything will be accepted.
+
+Before contributing, please read this section carefully.
+
+---
+
+### What kind of contributions are welcome
+
+- Bug fixes
+- Improvements to error explanations
+- Better human-readable output
+- Documentation improvements
+- Small, focused features that align with the project philosophy
+
+If you are unsure whether something fits, open an issue first.
+
+---
+
+### What will likely not be accepted
+
+- Large feature additions without prior discussion
+- Flag-heavy interfaces or short-option aliases
+- Changes that hide or automate potentially risky behavior
+- Anything that reduces clarity in favor of convenience
+
+Aurora intentionally favors understanding over speed and automation.
+
+---
+
+### Code style and structure
+
+- Keep changes small and focused
+- Follow existing project structure
+- Avoid clever abstractions
+- Prefer explicit, readable code over brevity
+
+If your change is hard to explain, it probably does not belong.
+
+---
+
+### Commit messages
+
+Write clear, descriptive commit messages.
+
+Good:
+```
+
+explain missing dependency errors more clearly
+
+```
+
+Bad:
+```
+
+fix stuff
+
+```
+
+---
+
+### Testing and behavior changes
+
+If your change alters user-visible behavior:
+- Explain the reasoning in the pull request
+- Include example terminal output when possible
+
+Aurora values predictable behavior.
+
+---
+
+### Reporting bugs
+
+When reporting bugs, include:
+- Command used
+- Expected behavior
+- Actual behavior
+- Relevant error output (redacted if necessary)
+
+Vague bug reports are hard to act on.
+
+---
+
+### Code of conduct
+
+Be respectful and constructive.
+
+This project is maintained in spare time.
+Disagreements are fine.
+Disrespect is not.
+
+---
+
