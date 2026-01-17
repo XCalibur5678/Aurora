@@ -86,24 +86,11 @@ Aurora is a **learning-focused, community-driven project**.
 * **Expect clarity.**
 
 ---
-Good instinct. A **CONTRIBUTING section is a quiet flex** — most student projects skip it, and interviewers notice.
 
-I’ll give you a **contributing section that matches aurora’s philosophy**: strict, welcoming, and not naïve.
-
-You want three things simultaneously:
-
-1. Encourage contributions
-2. Filter low-effort noise
-3. Set technical standards without sounding arrogant
-
-Here’s a **ready-to-paste** section. Don’t edit it unless you’re very sure.
-
----
 
 ## Contributing
 
-Aurora is an opinionated project.  
-Contributions are welcome, but not everything will be accepted.
+To maintain Aurora's focus on clarity, we prioritize contributions that align with our core philosophy. Please open an issue to discuss large changes before starting work.
 
 Before contributing, please read this section carefully.
 
@@ -117,7 +104,7 @@ Before contributing, please read this section carefully.
 - Documentation improvements
 - Small, focused features that align with the project philosophy
 
-If you are unsure whether something fits, open an issue first.
+If you are unsure whether something fits, please open an issue first.
 
 ---
 
@@ -136,10 +123,7 @@ Aurora intentionally favors understanding over speed and automation.
 
 - Keep changes small and focused
 - Follow existing project structure
-- Avoid clever abstractions
-- Prefer explicit, readable code over brevity
-
-If your change is hard to explain, it probably does not belong.
+- Prefer explicit, readable code over complex abstractions. Clarity is our primary feature.
 
 ---
 
