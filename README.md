@@ -70,11 +70,10 @@ Aurora does not replace `pacman`; it orchestrates it. All system changes are ult
 
 ## Target Audience
 
-## Who aurora is FOR 
-
 * New Arch users 
 * Curious Linux users 
 * People who want to understand their system 
+
 
 ---
 
