@@ -4,6 +4,6 @@ import (
 	"fmt"
 )
 
-func test() {
+func Test() {
 	fmt.Println("This is a test message")
 }
