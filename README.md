@@ -1,4 +1,3 @@
----
 # Aurora
 
 **Aurora** is a simple, opinionated CLI tool for installing AUR packages on Arch Linux.
