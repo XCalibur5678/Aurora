@@ -11,7 +11,7 @@ import (
 )
 
 // Define a struct to hold the JSON response from the AUR RPC interface
-var result struct {
+type SearchResult struct {
 	Type        string `json:"type"`
 	ResultCount int    `json:"resultcount"`
 	Results     []struct {
@@ -49,6 +49,7 @@ func search(cmd *cobra.Command, args []string) {
 		fmt.Printf("Received non-OK HTTP status: %s\n", resp.Status)
 		return
 	}
+	var result SearchResult
 
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
@@ -80,8 +81,7 @@ func search(cmd *cobra.Command, args []string) {
 	var displayCount int = 10
 	fmt.Scanln(&displayCount)
 	if displayCount != 10 {
-		if displayCount > 0 || displayCount < result.ResultCount {
-			displayCount = result.ResultCount
+		if displayCount > 0 && displayCount < result.ResultCount {
 			for _, pkg := range result.Results[:displayCount] {
 				fmt.Printf("- Name: %s Votes: %d\n", pkg.Name, pkg.NumVotes)
 			}
