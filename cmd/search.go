@@ -24,43 +24,34 @@ type SearchResult struct {
 	} `json:"results"`
 }
 
-func search(cmd *cobra.Command, args []string) {
-
-	//if no argument is provided, print a message and exit
-	if len(args) == 0 {
-		fmt.Println("Please provide a package name to search for.")
-		return
-	}
-
-	packageName := args[0]
+func searchPackage(packageName string) (string, error) {
 	fmt.Printf("Searching for package: %s\n", packageName)
 	const aurRPCURL = "https://aur.archlinux.org/rpc/v5/search/"
 	url := aurRPCURL + packageName
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
+
 	if err != nil {
 		fmt.Printf("Error making HTTP request: %v\n", err)
-		return
+		return err.Error(), err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Received non-OK HTTP status: %s\n", resp.Status)
-		return
+		return "", fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
 	}
 	var result SearchResult
 
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
-		fmt.Printf("Error decoding JSON response: %v\n", err)
-		return
+		return "", fmt.Errorf("Error decoding JSON response: %v\n", err)
 	}
 
 	//If no packages are found, print a message and exit
 	if result.ResultCount == 0 {
 		fmt.Println("No packages found matching the search query.")
-		return
+		return "", nil
 	}
 
 	/*Print number of packages found and ask the user how many packages to display.
@@ -89,11 +80,11 @@ func search(cmd *cobra.Command, args []string) {
 			fmt.Println("Invalid input.")
 		}
 	}
-	fmt.Print("For more details, enter the package name. (Press Enter to skip): ")
+	fmt.Print("Enter your package name to install. If you want to quit, press Enter: ")
 	name := ""
 	fmt.Scanln(&name)
 	if name == "" {
-		return
+		return "", nil
 	}
 
 	for _, pkg := range result.Results[:displayCount] {
@@ -102,10 +93,26 @@ func search(cmd *cobra.Command, args []string) {
 			fmt.Printf("Name: %s\nVersion: %s\nDescription: %s\nURL: %s\nLast Modified: %s\nVotes: %d\n",
 				pkg.Name, pkg.Version, pkg.Description, pkg.URL, time.Unix(pkg.LastModified, 0).Format(time.RFC1123), pkg.NumVotes)
 			fmt.Println("---------End-----------")
-			return
+			return name, nil
+		} else {
+			fmt.Printf("Package '%s' not found in the search results.\n", name)
 		}
 	}
-	fmt.Printf("Package '%s' not found in the search results.\n", name)
+	return name, nil
+
+}
+
+var search = func(cmd *cobra.Command, args []string) {
+	//if no argument is provided, print a message and exit
+	if len(args) == 0 {
+		fmt.Println("Please provide a package name to search for.")
+		return
+	}
+	packageName := args[0]
+	_, err := searchPackage(packageName)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	}
 }
 
 var searchCmd = &cobra.Command{
