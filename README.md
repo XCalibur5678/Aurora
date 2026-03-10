@@ -1,181 +1,83 @@
 # Aurora
 
-**Aurora** is a simple, opinionated CLI tool for installing AUR packages on Arch Linux or Arch Linux based distros like Manjaro , Garuda Linux etc.
+**Aurora** is a transparent, opinionated CLI tool for managing AUR packages on Arch Linux and its derivatives (Manjaro, Garuda, etc.).
 
 It exists for one reason: **to make AUR usage understandable, not magical.**
 
 ---
 
-## Why Aurora exists
+## The Philosophy: "No Surprises"
 
-Arch Linux is not difficult because it is complex. It is difficult because its tools assume prior knowledge.
+Arch Linux is powerful because it is explicit. Most AUR helpers hide this power behind cryptic flags and implicit, automated behavior. Aurora takes a different path.
 
-Most existing AUR helpers optimize for power users:
-
-* **Short flags** instead of descriptive words.
-* **Implicit behavior** that happens behind the scenes.
-* **Noisy, cryptic error messages** that require a wiki search.
-* **Minimal explanation** of what is actually happening to the system.
-
-**Aurora** deliberately chooses a different path.
+*   **Transparency First:** Aurora is an orchestrator, not a black box. It wraps standard tools like `git`, `makepkg`, and `pacman` to perform tasks, meaning you can always see exactly what is happening to your system.
+*   **No Implicit Actions:** Dependencies are listed, PKGBUILDs are summarized, and nothing is installed silently. If Aurora changes your system, you will know exactly *how* and *why*.
+*   **Human-Readable:** No need to memorize obscure flag combinations. Aurora uses clear, descriptive commands.
+*   **Pacman is King:** Aurora does not reinvent the wheel. It delegates the heavy lifting to `pacman` and `makepkg`, acting as a clean, intuitive layer on top.
 
 ---
 
-## Design Philosophy
+## Features
 
-Aurora follows a small set of strict rules to ensure transparency and ease of use.
+Aurora currently provides the essential lifecycle management for AUR packages:
 
-### 1. No Surprises
+- `aurora search <pkg>`: Interactive search via the AUR RPC, allowing you to choose and inspect packages before installation.
+- `aurora install <pkg>`: Clones the AUR repository, lets you inspect it, and builds/installs using `makepkg -si`.
+- `aurora remove <pkg>`: Safely removes packages while helping you resolve naming discrepancies.
+- `aurora update`: Checks your system for foreign (AUR) packages, compares versions against the AUR, and optionally triggers a rebuild for updates, followed by a system-wide `pacman -Syu`.
 
-Every action is explained before it happens.
+---
 
-* Dependencies are shown before installation.
-* Package sources are clearly identified.
-* Nothing installs silently.
+## Installation
 
-> If Aurora is about to change your system, you will know exactly **how** and **why**.
-
-### 2. Human-Readable Commands
-
-Aurora uses words, not flags. You should not need to memorize abbreviations to manage your software.
+### 1. The Simple Way (Recommended)
+If you have [Go](https://go.dev/) installed, you can install the latest version directly:
 
 ```bash
-aurora install discord
-aurora remove discord
-aurora search neovim
-aurora update
-
+go install github.com/abhigyan-chatterjee/aurora@latest
 ```
 
-### 3. Explain, Don’t Obscure
+### 2. Build from Source
+For a local build from source:
 
-Aurora does not hide Arch internals; it translates them. If something fails, Aurora explains the likely cause in plain language and offers the full technical output only if requested.
+```bash
+git clone https://github.com/abhigyan-chatterjee/aurora.git
+cd aurora
+go build -o aurora main.go
+sudo cp aurora /usr/local/bin/
+```
 
-**Errors should guide the user, not send them to a search engine.**
+### 3. Using make
+Using `make` to build and install:
 
-### 4. Safe Defaults
-
-Aurora is opinionated by design to protect the system:
-
-* Partial upgrades are discouraged.
-* AUR packages are clearly labeled as **unofficial**.
-* PKGBUILDs are summarized before execution.
-* If an action is risky, Aurora will explicitly say so.
-
-### 5. Pacman Does the Real Work
-
-Aurora does not replace `pacman`; it orchestrates it. All system changes are ultimately handled by `pacman` and `makepkg`. Aurora exists to make those tools user friendly, not to reinvent them.
-
----
-
-## Target Audience
-
-* New Arch users 
-* Curious Linux users 
-* People who want to understand their system 
-
+```bash
+git clone https://github.com/abhigyan-chatterjee/Aurora.git
+cd aurora
+make
+sudo make install
+```
 
 ---
 
-## Project Status
+## Getting Started
 
-Aurora is a **learning-focused, community-driven project**.
+Getting started is as simple as:
 
-* Expect bugs.
-* Expect rough edges.
-* **Expect clarity.**
+```bash
+aurora search <package-name>
+# Select your package, then follow the prompts.
+```
 
 ---
 
+## Why use this?
+
+Aurora is built for users who are transitioning to arch from Debian based Distros. The goal is to provide a familiar and simple flow for them to be comfortable with their system.  
+
+It is a learning-focused, community-driven project. Expect clarity, simplicity, and a direct line to your system’s operations.
+
+---
 
 ## Contributing
 
-To maintain Aurora's focus on clarity, we prioritize contributions that align with our core philosophy. Please open an issue to discuss large changes before starting work.
-
-Before contributing, please read this section carefully.
-
----
-
-### What kind of contributions are welcome
-
-- Bug fixes
-- Improvements to error explanations
-- Better human-readable output
-- Documentation improvements
-- Small, focused features that align with the project philosophy
-
-If you are unsure whether something fits, please open an issue first.
-
----
-
-### What will likely not be accepted
-
-- Large feature additions without prior discussion
-- Flag-heavy interfaces or short-option aliases
-- Changes that hide or automate potentially risky behavior
-- Anything that reduces clarity in favor of convenience
-
-Aurora intentionally favors understanding over speed and automation.
-
----
-
-### Code style and structure
-
-- Keep changes small and focused
-- Follow existing project structure
-- Prefer explicit, readable code over complex abstractions. Clarity is our primary feature.
-
----
-
-### Commit messages
-
-Write clear, descriptive commit messages.
-
-Good:
-```
-
-explain missing dependency errors more clearly
-
-```
-
-Bad:
-```
-
-fix stuff
-
-```
-
----
-
-### Testing and behavior changes
-
-If your change alters user-visible behavior:
-- Explain the reasoning in the pull request
-- Include example terminal output when possible
-
-Aurora values predictable behavior.
-
----
-
-### Reporting bugs
-
-When reporting bugs, include:
-- Command used
-- Expected behavior
-- Actual behavior
-- Relevant error output (redacted if necessary)
-
-Vague bug reports are hard to act on.
-
----
-
-### Code of conduct
-
-Be respectful and constructive.
-
-This project is maintained in spare time.
-Disagreements are fine.
-Disrespect is not.
-
----
-
+We value clarity above all else. If you have an idea for a feature or a bug fix, please open an issue to discuss it first. We prioritize changes that keep the tool transparent, readable, and predictable.
