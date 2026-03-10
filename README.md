@@ -11,7 +11,6 @@ It exists for one reason: **to make AUR usage understandable, not magical.**
 Arch Linux is powerful because it is explicit. Most AUR helpers hide this power behind cryptic flags and implicit, automated behavior. Aurora takes a different path.
 
 *   **Transparency First:** Aurora is an orchestrator, not a black box. It wraps standard tools like `git`, `makepkg`, and `pacman` to perform tasks, meaning you can always see exactly what is happening to your system.
-*   **No Implicit Actions:** Dependencies are listed, PKGBUILDs are summarized, and nothing is installed silently. If Aurora changes your system, you will know exactly *how* and *why*.
 *   **Human-Readable:** No need to memorize obscure flag combinations. Aurora uses clear, descriptive commands.
 *   **Pacman is King:** Aurora does not reinvent the wheel. It delegates the heavy lifting to `pacman` and `makepkg`, acting as a clean, intuitive layer on top.
 
