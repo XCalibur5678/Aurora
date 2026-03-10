@@ -1,6 +1,6 @@
 package main
 
-import "github.com/XCalibur5678/Aurora/cmd"
+import "github.com/abhigyan-chatterjee/aurora/cmd"
 
 func main() {
 	cmd.Execute()

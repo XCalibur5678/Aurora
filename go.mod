@@ -1,4 +1,4 @@
-module github.com/XCalibur5678/Aurora
+module github.com/abhigyan-chatterjee/aurora
 
 go 1.25.6
 
