@@ -81,7 +81,7 @@ func search(cmd *cobra.Command, args []string) {
 	var displayCount int = 10
 	fmt.Scanln(&displayCount)
 	if displayCount != 10 {
-		if displayCount > 0 && displayCount < result.ResultCount {
+		if displayCount > 0 && displayCount <= result.ResultCount {
 			for _, pkg := range result.Results[:displayCount] {
 				fmt.Printf("- Name: %s Votes: %d\n", pkg.Name, pkg.NumVotes)
 			}
