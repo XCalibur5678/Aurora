@@ -6,9 +6,16 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 
 	"github.com/spf13/cobra"
 )
+
+func isValidPkgName(name string) bool {
+	// Basic AUR package naming convention: alphanumeric, dash, dot, underscore
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-\._]+$`, name)
+	return matched
+}
 
 func install(cmd *cobra.Command, args []string) {
 	//if no argument is provided, print a message and exit
@@ -18,7 +25,17 @@ func install(cmd *cobra.Command, args []string) {
 	}
 
 	packageName := args[0]
+
+	if !isValidPkgName(packageName) {
+		fmt.Println("Error: Invalid package name format.")
+		return
+	}
+
 	packageName, _ = searchPackage(packageName)
+
+	if packageName == "" {
+		return
+	}
 
 	err := cloneAndBuild(packageName)
 	if err != nil {
