@@ -12,7 +12,6 @@ import (
 )
 
 func isValidPkgName(name string) bool {
-	// Basic AUR package naming convention: alphanumeric, dash, dot, underscore
 	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-\._]+$`, name)
 	return matched
 }
