@@ -94,10 +94,9 @@ func searchPackage(packageName string) (string, error) {
 				pkg.Name, pkg.Version, pkg.Description, pkg.URL, time.Unix(pkg.LastModified, 0).Format(time.RFC1123), pkg.NumVotes)
 			fmt.Println("---------End-----------")
 			return name, nil
-		} else {
-			fmt.Printf("Package '%s' not found in the search results.\n", name)
 		}
 	}
+	fmt.Printf("Package '%s' not found in the search results.\n", name)
 	return name, nil
 
 }
