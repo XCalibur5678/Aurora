@@ -71,7 +71,7 @@ func searchPackage(packageName string) (string, error) {
 		top_result_length = 10
 	}
 
-	for _, pkg := range result.Results[:10] {
+	for _, pkg := range result.Results[:top_result_length] {
 		fmt.Printf("- Name: %s Votes: %d\n", pkg.Name, pkg.NumVotes)
 	}
 
