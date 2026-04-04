@@ -76,7 +76,7 @@ func searchPackage(packageName string) (string, error) {
 	}
 
 	fmt.Print("Do you want to display more packages? (Enter a number or press Enter to skip): ")
-
+	var displayCount int
 	fmt.Scanln(&displayCount)
 	if displayCount != 10 {
 		if displayCount > 0 && displayCount <= result.ResultCount {
