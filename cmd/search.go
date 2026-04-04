@@ -64,12 +64,19 @@ func searchPackage(packageName string) (string, error) {
 		return result.Results[i].NumVotes > result.Results[j].NumVotes
 	})
 
+	top_result_length := len(result.Results)
+	if top_result_length < 10 {
+		top_result_length = top_result_length
+	} else {
+		top_result_length = 10
+	}
+
 	for _, pkg := range result.Results[:10] {
 		fmt.Printf("- Name: %s Votes: %d\n", pkg.Name, pkg.NumVotes)
 	}
 
 	fmt.Print("Do you want to display more packages? (Enter a number or press Enter to skip): ")
-	var displayCount int = 10
+
 	fmt.Scanln(&displayCount)
 	if displayCount != 10 {
 		if displayCount > 0 && displayCount <= result.ResultCount {
