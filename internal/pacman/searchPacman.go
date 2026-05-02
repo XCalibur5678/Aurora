@@ -40,9 +40,15 @@ func SearchPacman(packageName string) ([]resolve.PacmanResult, error) {
 			continue
 		}
 
+		pkgName := matches[2]
+
+		if !strings.Contains(strings.ToLower(pkgName), strings.ToLower(packageName)) {
+			continue
+		}
+
 		results = append(results, resolve.PacmanResult{
 			Repository: matches[1],
-			Name:       matches[2],
+			Name:       pkgName,
 			Version:    matches[3],
 		})
 		currentPkg = &results[len(results)-1]

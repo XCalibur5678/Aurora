@@ -111,4 +111,3 @@ func SearchAURExact(packageName string) (*resolve.AURResult, error) {
 		NumVotes:     r.NumVotes,
 	}, nil
 }
-}
