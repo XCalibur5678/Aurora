@@ -73,7 +73,7 @@ aurora search <package-name>
 
 Aurora is built for users who are transitioning to arch from Debian based Distros. The goal is to provide a familiar and simple flow for them to be comfortable with their system.  
 
-It is a learning-focused, community-driven project. Expect clarity, simplicity, and a direct line to your system’s operations.
+It is a learning-focused, community-driven project. Expect clarity, simplicity, and a direct line to your system's operations.
 
 ---
 

@@ -1,4 +1,4 @@
-package AUR
+package aur
 
 import (
 	"encoding/json"
@@ -6,50 +6,109 @@ import (
 	"net/http"
 	"sort"
 	"time"
+
+	"aurora/internal/resolve"
 )
 
-type SearchResult struct {
-	Type        string `json:"type"`
-	ResultCount int    `json:"resultcount"`
-	Results     []struct {
-		Name         string `json:"Name"`
-		Version      string `json:"Version"`
-		Description  string `json:"Description"`
-		URL          string `json:"URL"`
-		LastModified int64  `json:"LastModified"`
-		NumVotes     int    `json:"NumVotes"`
-	} `json:"results"`
-}
-
-func searchAUR(packageName string) (*SearchResult, int, error) {
+func SearchAUR(packageName string) ([]resolve.AURResult, error) {
 	const aurRPCURL = "https://aur.archlinux.org/rpc/v5/search/"
 	url := aurRPCURL + packageName
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
-
 	if err != nil {
-		fmt.Printf("Error making HTTP request: %v\n", err)
-		return nil, 0, err
+		return nil, fmt.Errorf("error making HTTP request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
+		return nil, fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
 	}
-	var result SearchResult
-	err = json.NewDecoder(resp.Body).Decode(&result)
+
+	var raw struct {
+		ResultCount int `json:"resultcount"`
+		Results     []struct {
+			Name         string `json:"Name"`
+			Version      string `json:"Version"`
+			Description  string `json:"Description"`
+			URL          string `json:"URL"`
+			LastModified int64  `json:"LastModified"`
+			NumVotes     int    `json:"NumVotes"`
+		} `json:"results"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&raw)
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error decoding JSON response: %v\n", err)
+		return nil, fmt.Errorf("error decoding JSON response: %v", err)
 	}
 
-	if result.ResultCount == 0 {
-		return nil, 0, nil
+	if raw.ResultCount == 0 {
+		return nil, nil
 	}
 
-	sort.SliceStable(result.Results, func(i, j int) bool {
-		return result.Results[i].NumVotes > result.Results[j].NumVotes
+	var results []resolve.AURResult
+	for _, r := range raw.Results {
+		results = append(results, resolve.AURResult{
+			Name:         r.Name,
+			Version:      r.Version,
+			Description:  r.Description,
+			URL:          r.URL,
+			LastModified: r.LastModified,
+			NumVotes:     r.NumVotes,
+		})
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].NumVotes > results[j].NumVotes
 	})
-	return &result, len(result.Results), nil
 
+	return results, nil
+}
+
+func SearchAURExact(packageName string) (*resolve.AURResult, error) {
+	const aurInfoURL = "https://aur.archlinux.org/rpc/v5/info/"
+	url := aurInfoURL + packageName
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("error making HTTP request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
+	}
+
+	var raw struct {
+		ResultCount int `json:"resultcount"`
+		Results     []struct {
+			Name         string `json:"Name"`
+			Version      string `json:"Version"`
+			Description  string `json:"Description"`
+			URL          string `json:"URL"`
+			LastModified int64  `json:"LastModified"`
+			NumVotes     int    `json:"NumVotes"`
+		} `json:"results"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&raw)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding JSON response: %v", err)
+	}
+
+	if raw.ResultCount == 0 {
+		return nil, nil
+	}
+
+	r := raw.Results[0]
+	return &resolve.AURResult{
+		Name:         r.Name,
+		Version:      r.Version,
+		Description:  r.Description,
+		URL:          r.URL,
+		LastModified: r.LastModified,
+		NumVotes:     r.NumVotes,
+	}, nil
+}
 }
