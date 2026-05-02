@@ -1,43 +1,86 @@
-# Aurora
+# Aurora v0.2 🎉
 
-**Aurora** is a transparent, opinionated CLI tool for managing AUR packages on Arch Linux and its derivatives (Manjaro, Garuda, etc.).
-
-It exists for one reason: **to make AUR usage understandable, not magical.**
+**Aurora** is a beginner-first package workflow assistant for Arch-based Linux. It prefers official repositories over the AUR, explains every operation in plain English, and helps new users gradually understand Arch instead of punishing them for not already knowing it.
 
 ---
 
-## The Philosophy: "No Surprises"
+## What's New in v0.2
 
-Arch Linux is powerful because it is explicit. Most AUR helpers hide this power behind cryptic flags and implicit, automated behavior. Aurora takes a different path.
+v0.2 is the foundation release — the first version that proves Aurora's philosophy is the right one.
 
-*   **Transparency First:** Aurora is an orchestrator, not a black box. It wraps standard tools like `git`, `makepkg`, and `pacman` to perform tasks, meaning you can always see exactly what is happening to your system.
-*   **Human-Readable:** No need to memorize obscure flag combinations. Aurora uses clear, descriptive commands.
-*   **Pacman is King:** Aurora does not reinvent the wheel. It delegates the heavy lifting to `pacman` and `makepkg`, acting as a clean, intuitive layer on top.
+### Official repositories first, always
+
+Aurora now queries `pacman` before the AUR for every operation. When a package exists in both, Aurora recommends the official version and explains why. No other AUR helper does this as a design principle.
+
+### New commands
+
+- **`aurora info <package>`** — See package details, source (official or AUR), version, and description at a glance.
+- **Automatic Arch detection** — Aurora refuses to run on non-Arch systems with a clear message. No cryptic errors.
+
+### Rewritten internals
+
+- **`search`** — Searches official repos first, offers AUR as an explicit opt-in. Results show source labels and sort by relevance.
+- **`install`** — Exact-match resolution flow: tries pacman, falls back to AUR, offers fuzzy search when the package is unknown.
+- **`remove`** — Resolves installed packages safely, shows the `-Rns` command with a plain-English explanation, confirms before acting.
+- **`update`** — Checks AUR packages for newer versions first, then explains `pacman -Syu` flag-by-flag before running the full system upgrade.
+- **Modular architecture** — All heavy lifting moved to `internal/pacman/` and `internal/aur/`. `cmd/` is a thin orchestration layer.
 
 ---
 
-## Features
+## Commands
 
-Aurora currently provides the essential lifecycle management for AUR packages:
+| Command | What it does |
+|---|---|
+| `aurora search <query>` | Search official repos, optionally search AUR |
+| `aurora info <package>` | Show detailed package information |
+| `aurora install <package>` | Install from official repos (preferred) or AUR |
+| `aurora remove <package>` | Remove a package safely with confirmation |
+| `aurora update` | Check AUR for updates, then full system upgrade |
 
-- `aurora search <pkg>`: Interactive search via the AUR RPC, allowing you to choose and inspect packages before installation.
-- `aurora install <pkg>`: Clones the AUR repository, lets you inspect it, and builds/installs using `makepkg -si`.
-- `aurora remove <pkg>`: Safely removes packages while helping you resolve naming discrepancies.
-- `aurora update`: Checks your system for foreign (AUR) packages, compares versions against the AUR, and optionally triggers a rebuild for updates, followed by a system-wide `pacman -Syu`.
+---
+
+## Philosophy
+
+- **Pacman is King** — Aurora delegates to `pacman` and `makepkg`. It orchestrates, never replaces.
+- **Transparency First** — Every destructive command is previewed with a plain-English explanation before it runs.
+- **No Jargon Without Explanation** — When Aurora says "`-Syu`", it explains what those mean right there.
+- **Official Wins** — Official repositories are always preferred. AUR is an explicit choice, not a hidden default.
+
+---
+
+## Who This Is For
+
+- New Arch users coming from Ubuntu, Debian, Mint, or Pop!_OS
+- Users who want to learn Arch, not memorize flags
+- Anyone who prefers guided, explained workflows over terse output
+
+Aurora is **not** a `yay` or `paru` replacement for power users. It's a teaching tool that happens to be a capable package assistant.
 
 ---
 
 ## Installation
 
-### 1. The Simple Way (Recommended)
-If you have [Go](https://go.dev/) installed, you can install the latest version directly:
+### 1. Download Pre-built Binary (Recommended)
+
+Download the latest binary from the [releases page](https://github.com/abhigyan-chatterjee/aurora/releases), then:
+
+```bash
+sudo cp aurora /usr/local/bin/
+```
+
+That's it. `/usr/local/bin/` is already on your `PATH` across bash, zsh, and fish — no shell config changes needed.
+
+### 2. Install with Go
+
+Requires Go 1.25+:
 
 ```bash
 go install github.com/abhigyan-chatterjee/aurora@latest
 ```
 
-### 2. Build from Source
-For a local build from source:
+This places the binary in `$GOPATH/bin` (defaults to `~/go/bin`). Make sure that directory is on your `PATH`.
+
+### 3. Build from Source
 
 ```bash
 git clone https://github.com/abhigyan-chatterjee/aurora.git
@@ -46,37 +89,29 @@ go build -o aurora main.go
 sudo cp aurora /usr/local/bin/
 ```
 
-### 3. Using make
-Using `make` to build and install:
+---
+
+## Quick Start
 
 ```bash
-git clone https://github.com/abhigyan-chatterjee/Aurora.git
-cd aurora
-make
-sudo make install
+aurora search neovim      # Search official repos + optional AUR
+aurora info neovim        # See where it lives and what version
+aurora install neovim     # Official repos if available, AUR otherwise
+aurora update             # Update AUR packages + full system upgrade
+aurora remove neovim      # Safe removal with confirmation
 ```
 
 ---
 
-## Getting Started
+## Roadmap
 
-Getting started is as simple as:
-
-```bash
-aurora search <package-name>
-# Select your package, then follow the prompts.
-```
-
----
-
-## Why use this?
-
-Aurora is built for users who are transitioning to arch from Debian based Distros. The goal is to provide a familiar and simple flow for them to be comfortable with their system.  
-
-It is a learning-focused, community-driven project. Expect clarity, simplicity, and a direct line to your system's operations.
+- **v0.3 — Teaching mode**: `explain` command, beginner vs concise modes, Arch concept walkthroughs
+- **v0.4 — Source intelligence**: `--from official|aur`, PKGBUILD inspection, source recommendations
+- **v0.5 — Lifecycle**: `list` commands, orphan handling, cache cleanup
+- **v0.6+ — Polish**: Tests, better errors, docs, demo flows
 
 ---
 
 ## Contributing
 
-We value clarity above all else. If you have an idea for a feature or a bug fix, please open an issue to discuss it first. We prioritize changes that keep the tool transparent, readable, and predictable.
+We value clarity. If you have an idea, open an issue first — we prioritize changes that keep Aurora transparent and predictable.
