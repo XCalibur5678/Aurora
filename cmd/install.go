@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
-	"os/user"
-	"path/filepath"
 	"regexp"
+	"strings"
+
+	"aurora/internal/aur"
+	"aurora/internal/pacman"
+	"aurora/internal/resolve"
 
 	"github.com/spf13/cobra"
 )
@@ -17,9 +20,8 @@ func isValidPkgName(name string) bool {
 }
 
 func install(cmd *cobra.Command, args []string) {
-	//if no argument is provided, print a message and exit
 	if len(args) == 0 {
-		fmt.Println("Please provide a package name to search for.")
+		fmt.Println("Please provide a package name to install.")
 		return
 	}
 
@@ -30,59 +32,159 @@ func install(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	packageName, _ = searchPackage(packageName)
+	reader := bufio.NewReader(os.Stdin)
 
-	if packageName == "" {
+	pacmanPkg, _ := pacman.SearchPacmanExact(packageName)
+	if pacmanPkg != nil {
+		fmt.Printf("\nFound \"%s\" in official repositories.\n", packageName)
+		displayPacmanSummary(pacmanPkg)
+		fmt.Println("\nOfficial repositories are the recommended source — packages are prebuilt and maintained as part of the normal Arch package flow.")
+		fmt.Print("\nProceed with install? (y/N): ")
+
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input == "y" || input == "yes" {
+			err := pacman.InstallPacman(pacmanPkg)
+			if err != nil {
+				fmt.Printf("Error: installation failed: %v\n", err)
+			}
+		}
 		return
 	}
 
-	err := cloneAndBuild(packageName)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+	aurPkg, _ := aur.SearchAURExact(packageName)
+	if aurPkg != nil {
+		fmt.Printf("\n\"%s\" not found in official repositories.\n", packageName)
+		fmt.Println("Querying AUR...")
+		fmt.Printf("\nFound \"%s\" in the AUR.\n", packageName)
+		displayAURSummary(aurPkg)
+		fmt.Print("\nProceed with install? (y/N): ")
+
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input == "y" || input == "yes" {
+			fmt.Printf("\nInstalling %s from AUR...\n", aurPkg.Name)
+			err := aur.InstallAUR(aurPkg.Name)
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+		}
+		return
+	}
+
+	fmt.Printf("\n\"%s\" was not found in official repositories or the AUR.\n", packageName)
+	fmt.Print("Would you like to search for similar packages? (y/N): ")
+
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input != "y" && input != "yes" {
+		return
+	}
+
+	pacmanResults, pacmanErr := pacman.SearchPacman(packageName)
+	if pacmanErr != nil {
+		fmt.Printf("Error searching official repositories: %v\n", pacmanErr)
+	}
+
+	aurResults := []resolve.AURResult{}
+	hasAUR := false
+
+	if len(pacmanResults) > 0 {
+		displayPacmanResults(pacmanResults)
+		fmt.Println("\nOfficial repositories are the recommended source — packages are prebuilt and maintained as part of the normal Arch package flow.")
+		fmt.Print("\nSearch the AUR as well? (y/N): ")
+
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input == "y" || input == "yes" {
+			var aurErr error
+			aurResults, aurErr = aur.SearchAUR(packageName)
+			if aurErr != nil {
+				fmt.Printf("Error searching AUR: %v\n", aurErr)
+			}
+			if len(aurResults) > 0 {
+				displayAURResults(aurResults)
+				hasAUR = true
+			} else {
+				fmt.Println("\nNo results found in the AUR.")
+			}
+		}
+	} else {
+		var aurErr error
+		aurResults, aurErr = aur.SearchAUR(packageName)
+		if aurErr != nil {
+			fmt.Printf("Error searching AUR: %v\n", aurErr)
+		}
+		if len(aurResults) > 0 {
+			displayAURResults(aurResults)
+			hasAUR = true
+		} else {
+			fmt.Printf("\nNo results found for \"%s\" in official repositories or the AUR.\n", packageName)
+			return
+		}
+	}
+
+	fmt.Print("\nEnter the package name you would like to install (or press Enter to skip): ")
+	detailName, _ := reader.ReadString('\n')
+	detailName = strings.TrimSpace(detailName)
+
+	if detailName == "" {
+		return
+	}
+
+	if pkg, found := lookupPacmanPackage(pacmanResults, detailName); found {
+		displayPacmanSummary(&pkg)
+		fmt.Print("\nProceed with install? (y/N): ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input == "y" || input == "yes" {
+			err := pacman.InstallPacman(&pkg)
+			if err != nil {
+				fmt.Printf("Error: installation failed: %v\n", err)
+			}
+		}
+		return
+	}
+
+	if hasAUR {
+		if pkg, found := lookupAURPackage(aurResults, detailName); found {
+			displayAURSummary(&pkg)
+			fmt.Print("\nProceed with install? (y/N): ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input == "y" || input == "yes" {
+				fmt.Printf("\nInstalling %s from AUR...\n", pkg.Name)
+				err := aur.InstallAUR(pkg.Name)
+				if err != nil {
+					fmt.Printf("Error: %v\n", err)
+				}
+			}
+			return
+		}
+	}
+
+	fmt.Printf("Could not find package \"%s\" in the search results.\n", detailName)
+}
+
+func displayPacmanSummary(pkg *resolve.PacmanResult) {
+	fmt.Printf("\n  %s/%s  %s\n", pkg.Repository, pkg.Name, pkg.Version)
+	if pkg.Description != "" {
+		fmt.Printf("  %s\n", pkg.Description)
 	}
 }
 
-func cloneAndBuild(packageName string) error {
-	usr, _ := user.Current()
-	cacheDir := filepath.Join(usr.HomeDir, ".cache", "aurora")
-
-	// Create cache directory
-	err := os.MkdirAll(cacheDir, 0755)
-	if err != nil {
-		return fmt.Errorf("could not create cache directory: %v", err)
+func displayAURSummary(pkg *resolve.AURResult) {
+	fmt.Printf("\n  %s  %s\n", pkg.Name, pkg.Version)
+	if pkg.Description != "" {
+		fmt.Printf("  %s\n", pkg.Description)
 	}
-
-	pkgDir := filepath.Join(cacheDir, packageName)
-
-	// Clean up old directory if it exists
-	os.RemoveAll(pkgDir)
-
-	// Clone the repo
-	repoURL := fmt.Sprintf("https://aur.archlinux.org/%s.git", packageName)
-	fmt.Printf("Cloning %s...\n", repoURL)
-	cloneCmd := exec.Command("git", "clone", repoURL, pkgDir)
-	if err := cloneCmd.Run(); err != nil {
-		return fmt.Errorf("failed to clone: %v", err)
-	}
-
-	// Build and install
-	fmt.Println("Building package...")
-	buildCmd := exec.Command("makepkg", "-si")
-	buildCmd.Dir = pkgDir
-	buildCmd.Stdout = os.Stdout
-	buildCmd.Stderr = os.Stderr
-	buildCmd.Stdin = os.Stdin
-
-	if err := buildCmd.Run(); err != nil {
-		return fmt.Errorf("makepkg failed: %v", err)
-	}
-
-	return nil
+	fmt.Printf("  Votes: %d\n", pkg.NumVotes)
+	fmt.Println("\nNote: installing from AUR means Aurora will clone the build files and build locally using makepkg.")
 }
 
 var installCmd = &cobra.Command{
 	Use:   "install [package]",
-	Short: "installs the specified package on the system",
+	Short: "Installs the specified package from official repositories or AUR",
 	Run:   install,
 }
 
