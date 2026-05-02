@@ -1,145 +1,122 @@
 package cmd
 
 import (
-	"encoding/json"
+	"bufio"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
-	"time"
+
+	"aurora/internal/aur"
+	"aurora/internal/pacman"
 
 	"github.com/spf13/cobra"
 )
 
-type PackageInfo struct {
-	Name    string `json:"Name"`
-	Version string `json:"Version"`
-}
-
-type InfoResponse struct {
-	ResultCount int           `json:"resultcount"`
-	Results     []PackageInfo `json:"results"`
-}
-
-func getInstalledForeign() (map[string]string, error) {
-	cmd := exec.Command("pacman", "-Qm")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	packages := make(map[string]string)
-	lines := strings.SplitSeq(strings.TrimSpace(string(output)), "\n")
-	for line := range lines {
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			packages[parts[0]] = parts[1]
-		}
-	}
-	return packages, nil
-}
-
-// isNewer returns true if aurVer is newer than localVer using 'vercmp'
-func isNewer(localVer, aurVer string) bool {
-	cmd := exec.Command("vercmp", aurVer, localVer)
-	output, err := cmd.Output()
-	if err != nil {
-		// If vercmp fails, fallback to basic inequality
-		return aurVer != localVer
-	}
-	// vercmp returns 1 if arg1 > arg2
-	return strings.TrimSpace(string(output)) == "1"
-}
-
 func update(cmd *cobra.Command, args []string) {
+	reader := bufio.NewReader(os.Stdin)
+
 	fmt.Println("Checking for AUR updates...")
 
-	installed, err := getInstalledForeign()
+	installed, err := pacman.GetForeignPackages()
 	if err != nil {
-		fmt.Printf("Error: could not list foreign packages: %v\n", err)
+		fmt.Printf("Error checking foreign packages: %v\n", err)
 		return
 	}
 
 	if len(installed) == 0 {
 		fmt.Println("No AUR packages installed.")
-		return
-	}
-
-	var argsQuery []string
-	for name := range installed {
-		argsQuery = append(argsQuery, "arg[]="+name)
-	}
-
-	url := "https://aur.archlinux.org/rpc/?v=5&type=info&" + strings.Join(argsQuery, "&")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		fmt.Printf("Error checking AUR: %v\n", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	var response InfoResponse
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		fmt.Printf("Error decoding AUR response: %v\n", err)
-		return
-	}
-
-	foundUpdates := false
-	for _, pkg := range response.Results {
-		localVer := installed[pkg.Name]
-		if isNewer(localVer, pkg.Version) {
-			fmt.Printf("Update available for %s: %s -> %s\n", pkg.Name, localVer, pkg.Version)
-			foundUpdates = true
-		}
-	}
-
-	if !foundUpdates {
-		fmt.Println("All AUR packages are up to date.")
 	} else {
-		fmt.Print("Do you want to update these AUR packages? (y/N): ")
-		var confirm string
-		fmt.Scanln(&confirm)
-		if strings.ToLower(confirm) == "y" {
-			for _, pkg := range response.Results {
-				localVer := installed[pkg.Name]
-				if isNewer(localVer, pkg.Version) {
-					fmt.Printf("Updating %s...\n", pkg.Name)
-					if err := cloneAndBuild(pkg.Name); err != nil {
-						fmt.Printf("Error updating %s: %v\n", pkg.Name, err)
+		var pkgNames []string
+		for name := range installed {
+			pkgNames = append(pkgNames, name)
+		}
+
+		aurResults, err := aur.GetAURInfoBatch(pkgNames)
+		if err != nil {
+			fmt.Printf("Error checking AUR: %v\n", err)
+			return
+		}
+
+		var outdated []struct {
+			name     string
+			localVer string
+			aurVer   string
+		}
+
+		for _, pkg := range aurResults {
+			localVer := installed[pkg.Name]
+			if pacman.IsNewerVersion(localVer, pkg.Version) {
+				outdated = append(outdated, struct {
+					name     string
+					localVer string
+					aurVer   string
+				}{
+					name:     pkg.Name,
+					localVer: localVer,
+					aurVer:   pkg.Version,
+				})
+			}
+		}
+
+		if len(outdated) == 0 {
+			fmt.Println("All AUR packages are up to date.")
+		} else {
+			fmt.Println("\nThe following AUR packages have updates available:")
+			for _, o := range outdated {
+				fmt.Printf("  %s  %s -> %s\n", o.name, o.localVer, o.aurVer)
+			}
+
+			fmt.Print("\nUpdate these AUR packages? (y/N): ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input == "y" || input == "yes" {
+				for _, o := range outdated {
+					fmt.Printf("\nUpdating %s...\n", o.name)
+					err := aur.InstallAUR(o.name)
+					if err != nil {
+						fmt.Printf("Error updating %s: %v\n", o.name, err)
 					}
 				}
+			} else {
+				fmt.Println("AUR updates skipped.")
 			}
-		} else {
-			fmt.Println("AUR updates skipped.")
 		}
 	}
 
-	fmt.Println("Do you want to perform a full system upgrade? We discourage partial upgrades, but you can choose to do so if you want.")
-	fmt.Println("Partial updates may cause the system to break. ")
-	fmt.Print("If you choose to fully update the system, type y. This will invoke: sudo pacman -Syu. (y/N): ")
+	fmt.Println("\nAurora is preparing a full system update.")
+	fmt.Println("\nThis will:")
+	fmt.Println("  1. Refresh package databases")
+	fmt.Println("  2. Upgrade installed official packages")
 
-	var sysConfirm string
-	fmt.Scanln(&sysConfirm)
-	if strings.ToLower(sysConfirm) == "y" || strings.ToLower(sysConfirm) == "yes" {
-		sysCmd := exec.Command("sudo", "pacman", "-Syu")
-		sysCmd.Stdout = os.Stdout
-		sysCmd.Stderr = os.Stderr
-		sysCmd.Stdin = os.Stdin
-		if err := sysCmd.Run(); err != nil {
-			fmt.Printf("Error during system upgrade: %v\n", err)
-		} else {
-			fmt.Println("System upgrade complete. Please restart your system for the changes to take effect.")
-		}
+	fmt.Println("\nUnderlying command: sudo pacman -Syu")
+	fmt.Println("\nMeaning:")
+	fmt.Println("  -S : synchronize/install packages from repositories")
+	fmt.Println("  -y : refresh package databases")
+	fmt.Println("  -u : upgrade installed packages")
+
+	fmt.Println("\nNote: partial upgrades are strongly discouraged on Arch-based systems.")
+	fmt.Print("\nProceed with full system upgrade? (y/N): ")
+
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input != "y" && input != "yes" {
+		fmt.Println("System upgrade skipped.")
+		_ = exec.Command("sudo", "pacman", "-Syy").Run()
+		return
+	}
+
+	err = pacman.SystemUpdate()
+	if err != nil {
+		fmt.Printf("Error during system upgrade: %v\n", err)
+	} else {
+		fmt.Println("System upgrade complete.")
 	}
 }
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Checks for updates for installed AUR packages",
+	Short: "Checks for AUR updates and performs a full system upgrade",
 	Run:   update,
 }
 
