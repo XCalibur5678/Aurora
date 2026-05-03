@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 )
 
 func InstallPacman(pkg *resolve.PacmanResult) error {

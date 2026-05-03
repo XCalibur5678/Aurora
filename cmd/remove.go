@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"aurora/internal/pacman"
+	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
 
 	"github.com/spf13/cobra"
 )

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 )
 
 func GetAURInfoBatch(packageNames []string) ([]resolve.AURResult, error) {

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 )
 
 func SearchAUR(packageName string) ([]resolve.AURResult, error) {

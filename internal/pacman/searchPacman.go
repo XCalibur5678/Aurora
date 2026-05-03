@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 )
 
 func SearchPacman(packageName string) ([]resolve.PacmanResult, error) {

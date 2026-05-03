@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"aurora/internal/aur"
-	"aurora/internal/pacman"
+	"github.com/abhigyan-chatterjee/aurora/internal/aur"
+	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
 
 	"github.com/spf13/cobra"
 )

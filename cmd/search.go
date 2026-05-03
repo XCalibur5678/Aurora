@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"aurora/internal/aur"
-	"aurora/internal/pacman"
-	"aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/aur"
+	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
+	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 
 	"github.com/spf13/cobra"
 )
