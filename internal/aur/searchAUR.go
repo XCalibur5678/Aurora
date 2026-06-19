@@ -10,12 +10,27 @@ import (
 	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 )
 
+const aurUserAgent = "aurora/0.2"
+
+func newAURRequest(url string) (*http.Request, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", aurUserAgent)
+	return req, nil
+}
+
 func SearchAUR(packageName string) ([]resolve.AURResult, error) {
 	const aurRPCURL = "https://aur.archlinux.org/rpc/v5/search/"
 	url := aurRPCURL + packageName
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	req, err := newAURRequest(url)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making HTTP request: %v", err)
 	}
@@ -70,7 +85,11 @@ func SearchAURExact(packageName string) (*resolve.AURResult, error) {
 	url := aurInfoURL + packageName
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	req, err := newAURRequest(url)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making HTTP request: %v", err)
 	}

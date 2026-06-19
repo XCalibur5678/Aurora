@@ -17,7 +17,10 @@ func info(cmd *cobra.Command, args []string) {
 
 	packageName := args[0]
 
-	pacmanPkg, _ := pacman.SearchPacmanExact(packageName)
+	pacmanPkg, pacmanErr := pacman.SearchPacmanExact(packageName)
+	if pacmanErr != nil {
+		fmt.Printf("Warning: could not query official repositories: %v\n", pacmanErr)
+	}
 	if pacmanPkg != nil {
 		fmt.Printf("\n--- Package Details ---\n")
 		fmt.Printf("Name        : %s\n", pacmanPkg.Name)
@@ -28,7 +31,10 @@ func info(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	aurPkg, _ := aur.SearchAURExact(packageName)
+	aurPkg, aurErr := aur.SearchAURExact(packageName)
+	if aurErr != nil {
+		fmt.Printf("Warning: could not query AUR: %v\n", aurErr)
+	}
 	if aurPkg != nil {
 		fmt.Printf("\n--- Package Details ---\n")
 		fmt.Printf("Name        : %s\n", aurPkg.Name)
@@ -41,7 +47,11 @@ func info(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	fmt.Printf("Package \"%s\" was not found in official repositories or the AUR.\n", packageName)
+	if pacmanErr != nil || aurErr != nil {
+		fmt.Printf("Could not confirm whether \"%s\" exists due to the errors above.\n", packageName)
+	} else {
+		fmt.Printf("Package \"%s\" was not found in official repositories or the AUR.\n", packageName)
+	}
 }
 
 var infoCmd = &cobra.Command{

@@ -15,6 +15,12 @@ import (
 )
 
 func isValidPkgName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if strings.Contains(name, "..") {
+		return false
+	}
 	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-\._]+$`, name)
 	return matched
 }

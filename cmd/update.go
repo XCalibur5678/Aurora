@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/abhigyan-chatterjee/aurora/internal/aur"
@@ -102,7 +101,6 @@ func update(cmd *cobra.Command, args []string) {
 	input = strings.TrimSpace(strings.ToLower(input))
 	if input != "y" && input != "yes" {
 		fmt.Println("System upgrade skipped.")
-		_ = exec.Command("sudo", "pacman", "-Syy").Run()
 		return
 	}
 

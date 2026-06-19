@@ -6,9 +6,29 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strings"
 )
 
+func isValidPackageName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if strings.Contains(name, "..") {
+		return false
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 func InstallAUR(packageName string) error {
+	if !isValidPackageName(packageName) {
+		return fmt.Errorf("invalid package name: %s", packageName)
+	}
+
 	usr, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("could not determine current user: %v", err)
@@ -22,6 +42,15 @@ func InstallAUR(packageName string) error {
 	}
 
 	pkgDir := filepath.Join(cacheDir, packageName)
+
+	if resolved, err := filepath.EvalSymlinks(cacheDir); err == nil {
+		cacheDir = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(filepath.Dir(pkgDir)); err == nil {
+		if !strings.HasPrefix(resolved, cacheDir) {
+			return fmt.Errorf("package path escapes cache directory: %s", packageName)
+		}
+	}
 
 	os.RemoveAll(pkgDir)
 

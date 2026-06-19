@@ -23,7 +23,11 @@ func GetAURInfoBatch(packageNames []string) ([]resolve.AURResult, error) {
 	url := "https://aur.archlinux.org/rpc/?v=5&type=info&" + strings.Join(argsQuery, "&")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := newAURRequest(url)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error checking AUR: %v", err)
 	}
