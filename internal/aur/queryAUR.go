@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -17,13 +18,13 @@ func GetAURInfoBatch(packageNames []string) ([]resolve.AURResult, error) {
 
 	var argsQuery []string
 	for _, name := range packageNames {
-		argsQuery = append(argsQuery, "arg[]="+name)
+		argsQuery = append(argsQuery, "arg[]="+url.QueryEscape(name))
 	}
 
-	url := "https://aur.archlinux.org/rpc/?v=5&type=info&" + strings.Join(argsQuery, "&")
+	reqURL := "https://aur.archlinux.org/rpc/?v=5&type=info&" + strings.Join(argsQuery, "&")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := newAURRequest(url)
+	req, err := newAURRequest(reqURL)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
@@ -32,6 +33,10 @@ func GetAURInfoBatch(packageNames []string) ([]resolve.AURResult, error) {
 		return nil, fmt.Errorf("error checking AUR: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
+	}
 
 	var raw struct {
 		ResultCount int `json:"resultcount"`

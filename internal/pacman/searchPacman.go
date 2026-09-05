@@ -10,39 +10,42 @@ import (
 	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
 )
 
-func SearchPacman(packageName string) ([]resolve.PacmanResult, error) {
-	cmd := exec.Command("pacman", "-Ss", packageName)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("error running pacman -Ss: %v", err)
-	}
+var (
+	pacmanSearchHeaderRe = regexp.MustCompile(`^([^/]+)/([^\s]+)\s+(.+)$`)
+	pacmanExactFieldRe   = regexp.MustCompile(`^([^:]+)\s*:\s*(.+)$`)
+)
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+// ParsePacmanSearchOutput parses the standard output of 'pacman -Ss' into structured results.
+// It filters results to those where the package name contains the query (case-insensitively).
+// Package descriptions appearing on subsequent indented lines are correctly associated with
+// the current matching package, and are cleared if an unmatched package header is encountered.
+func ParsePacmanSearchOutput(output string, packageName string) []resolve.PacmanResult {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
-		return nil, nil
+		return nil
 	}
-
-	firstLineRe := regexp.MustCompile(`^([^/]+)/([^\s]+)\s+(.+)$`)
 
 	var results []resolve.PacmanResult
-	var currentPkg *resolve.PacmanResult
+	currentIdx := -1
 
 	for _, line := range lines {
 		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			if currentPkg != nil && currentPkg.Description == "" {
-				currentPkg.Description = strings.TrimSpace(line)
+			if currentIdx >= 0 && results[currentIdx].Description == "" {
+				results[currentIdx].Description = strings.TrimSpace(line)
 			}
 			continue
 		}
 
-		matches := firstLineRe.FindStringSubmatch(line)
+		matches := pacmanSearchHeaderRe.FindStringSubmatch(line)
 		if matches == nil {
+			currentIdx = -1
 			continue
 		}
 
 		pkgName := matches[2]
 
 		if !strings.Contains(strings.ToLower(pkgName), strings.ToLower(packageName)) {
+			currentIdx = -1
 			continue
 		}
 
@@ -51,37 +54,49 @@ func SearchPacman(packageName string) ([]resolve.PacmanResult, error) {
 			Name:       pkgName,
 			Version:    matches[3],
 		})
-		currentPkg = &results[len(results)-1]
+		currentIdx = len(results) - 1
 	}
 
 	if len(results) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	sort.SliceStable(results, func(i, j int) bool {
-		return results[i].Name < results[j].Name
+		if results[i].Name != results[j].Name {
+			return results[i].Name < results[j].Name
+		}
+		return results[i].Repository < results[j].Repository
 	})
 
-	return results, nil
+	return results
 }
 
-func SearchPacmanExact(packageName string) (*resolve.PacmanResult, error) {
-	cmd := exec.Command("pacman", "-Si", packageName)
+func SearchPacman(packageName string) ([]resolve.PacmanResult, error) {
+	cmd := exec.Command("pacman", "-Ss", packageName)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("package not found in official repositories: %s", packageName)
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("error running pacman -Ss: %v", err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) == 0 {
-		return nil, nil
-	}
+	return ParsePacmanSearchOutput(string(output), packageName), nil
+}
 
-	fieldRe := regexp.MustCompile(`^([^:]+)\s*:\s*(.+)$`)
+// ParsePacmanExactOutput parses the standard output of 'pacman -Si' into a PacmanResult.
+func ParsePacmanExactOutput(output string, packageName string) *resolve.PacmanResult {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
+		return nil
+	}
 
 	var pkg resolve.PacmanResult
 	for _, line := range lines {
-		matches := fieldRe.FindStringSubmatch(line)
+		if line == "" && pkg.Name != "" {
+			break
+		}
+		matches := pacmanExactFieldRe.FindStringSubmatch(line)
 		if matches == nil {
 			continue
 		}
@@ -100,9 +115,22 @@ func SearchPacmanExact(packageName string) (*resolve.PacmanResult, error) {
 		}
 	}
 
-	if pkg.Name == "" {
-		return nil, nil
+	if pkg.Name == "" || !strings.EqualFold(pkg.Name, packageName) {
+		return nil
 	}
 
-	return &pkg, nil
+	return &pkg
+}
+
+func SearchPacmanExact(packageName string) (*resolve.PacmanResult, error) {
+	cmd := exec.Command("pacman", "-Si", packageName)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("error running pacman -Si: %v", err)
+	}
+
+	return ParsePacmanExactOutput(string(output), packageName), nil
 }

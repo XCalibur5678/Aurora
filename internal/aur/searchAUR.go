@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
@@ -23,7 +25,7 @@ func newAURRequest(url string) (*http.Request, error) {
 
 func SearchAUR(packageName string) ([]resolve.AURResult, error) {
 	const aurRPCURL = "https://aur.archlinux.org/rpc/v5/search/"
-	url := aurRPCURL + packageName
+	url := aurRPCURL + url.PathEscape(packageName)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := newAURRequest(url)
@@ -74,7 +76,10 @@ func SearchAUR(packageName string) ([]resolve.AURResult, error) {
 	}
 
 	sort.SliceStable(results, func(i, j int) bool {
-		return results[i].NumVotes > results[j].NumVotes
+		if results[i].NumVotes != results[j].NumVotes {
+			return results[i].NumVotes > results[j].NumVotes
+		}
+		return results[i].Name < results[j].Name
 	})
 
 	return results, nil
@@ -82,7 +87,7 @@ func SearchAUR(packageName string) ([]resolve.AURResult, error) {
 
 func SearchAURExact(packageName string) (*resolve.AURResult, error) {
 	const aurInfoURL = "https://aur.archlinux.org/rpc/v5/info/"
-	url := aurInfoURL + packageName
+	url := aurInfoURL + url.PathEscape(packageName)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := newAURRequest(url)
@@ -116,17 +121,22 @@ func SearchAURExact(packageName string) (*resolve.AURResult, error) {
 		return nil, fmt.Errorf("error decoding JSON response: %v", err)
 	}
 
-	if raw.ResultCount == 0 {
+	if raw.ResultCount == 0 || len(raw.Results) == 0 {
 		return nil, nil
 	}
 
-	r := raw.Results[0]
-	return &resolve.AURResult{
-		Name:         r.Name,
-		Version:      r.Version,
-		Description:  r.Description,
-		URL:          r.URL,
-		LastModified: r.LastModified,
-		NumVotes:     r.NumVotes,
-	}, nil
+	for _, r := range raw.Results {
+		if strings.EqualFold(r.Name, packageName) {
+			return &resolve.AURResult{
+				Name:         r.Name,
+				Version:      r.Version,
+				Description:  r.Description,
+				URL:          r.URL,
+				LastModified: r.LastModified,
+				NumVotes:     r.NumVotes,
+			}, nil
+		}
+	}
+
+	return nil, nil
 }

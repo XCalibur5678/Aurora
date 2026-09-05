@@ -4,25 +4,29 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/abhigyan-chatterjee/aurora/internal/aur"
+	"github.com/abhigyan-chatterjee/aurora/internal/lookup"
 	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
 	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/ui"
 
 	"github.com/spf13/cobra"
 )
 
-func isValidPkgName(name string) bool {
-	if name == "" || name == "." || name == ".." {
-		return false
-	}
-	if strings.Contains(name, "..") {
-		return false
-	}
-	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-\._]+$`, name)
-	return matched
+var (
+	installFromFlag     string
+	installOfficialFlag bool
+	installAURFlag      bool
+	installInspectFlag  bool
+)
+
+type installPlanItem struct {
+	Name         string
+	Source       resolve.PackageSource
+	PacmanResult *resolve.PacmanResult
+	AURResult    *resolve.AURResult
 }
 
 func install(cmd *cobra.Command, args []string) {
@@ -31,169 +35,247 @@ func install(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	packageName := args[0]
-
-	if !isValidPkgName(packageName) {
-		fmt.Println("Error: Invalid package name format.")
-		return
-	}
-
 	reader := bufio.NewReader(os.Stdin)
 
-	pacmanPkg, _ := pacman.SearchPacmanExact(packageName)
-	if pacmanPkg != nil {
-		fmt.Printf("\nFound \"%s\" in official repositories.\n", packageName)
-		displayPacmanSummary(pacmanPkg)
-		fmt.Println("\nOfficial repositories are the recommended source — packages are prebuilt and maintained as part of the normal Arch package flow.")
-		fmt.Print("\nProceed with install? (y/N): ")
+	sourceFilter := strings.ToLower(strings.TrimSpace(installFromFlag))
+	if installOfficialFlag {
+		sourceFilter = "official"
+	} else if installAURFlag {
+		sourceFilter = "aur"
+	}
 
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
-			err := pacman.InstallPacman(pacmanPkg)
-			if err != nil {
-				fmt.Printf("Error: installation failed: %v\n", err)
-			}
+	var validArgs []string
+	seen := make(map[string]bool)
+	for _, arg := range args {
+		if !ui.IsValidPkgName(arg) {
+			fmt.Printf("Warning: invalid package name format: %s\n", arg)
+			continue
 		}
-		return
-	}
-
-	aurPkg, _ := aur.SearchAURExact(packageName)
-	if aurPkg != nil {
-		fmt.Printf("\n\"%s\" not found in official repositories.\n", packageName)
-		fmt.Println("Querying AUR...")
-		fmt.Printf("\nFound \"%s\" in the AUR.\n", packageName)
-		displayAURSummary(aurPkg)
-		fmt.Print("\nProceed with install? (y/N): ")
-
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
-			fmt.Printf("\nInstalling %s from AUR...\n", aurPkg.Name)
-			err := aur.InstallAUR(aurPkg.Name)
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
+		norm := strings.ToLower(arg)
+		if seen[norm] {
+			continue
 		}
+		seen[norm] = true
+		validArgs = append(validArgs, arg)
+	}
+
+	if len(validArgs) == 0 {
 		return
 	}
 
-	fmt.Printf("\n\"%s\" was not found in official repositories or the AUR.\n", packageName)
-	fmt.Print("Would you like to search for similar packages? (y/N): ")
+	var resolvedList []*resolve.ResolvedPackage
 
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(strings.ToLower(input))
-	if input != "y" && input != "yes" {
-		return
-	}
-
-	pacmanResults, pacmanErr := pacman.SearchPacman(packageName)
-	if pacmanErr != nil {
-		fmt.Printf("Error searching official repositories: %v\n", pacmanErr)
-	}
-
-	aurResults := []resolve.AURResult{}
-	hasAUR := false
-
-	if len(pacmanResults) > 0 {
-		displayPacmanResults(pacmanResults)
-		fmt.Println("\nOfficial repositories are the recommended source — packages are prebuilt and maintained as part of the normal Arch package flow.")
-		fmt.Print("\nSearch the AUR as well? (y/N): ")
-
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
-			var aurErr error
-			aurResults, aurErr = aur.SearchAUR(packageName)
-			if aurErr != nil {
-				fmt.Printf("Error searching AUR: %v\n", aurErr)
+	if sourceFilter == "official" || sourceFilter == "repo" {
+		for _, q := range validArgs {
+			pPkg, _ := pacman.SearchPacmanExact(q)
+			res := &resolve.ResolvedPackage{Query: q, ChosenSource: resolve.SourceUnknown}
+			if pPkg != nil {
+				res.PacmanResult = pPkg
+				res.ChosenSource = resolve.SourceOfficial
 			}
-			if len(aurResults) > 0 {
-				displayAURResults(aurResults)
-				hasAUR = true
-			} else {
-				fmt.Println("\nNo results found in the AUR.")
+			resolvedList = append(resolvedList, res)
+		}
+	} else if sourceFilter == "aur" {
+		for _, q := range validArgs {
+			aPkg, _ := aur.SearchAURExact(q)
+			res := &resolve.ResolvedPackage{Query: q, ChosenSource: resolve.SourceUnknown}
+			if aPkg != nil {
+				res.AURResult = aPkg
+				res.ChosenSource = resolve.SourceAUR
 			}
+			resolvedList = append(resolvedList, res)
 		}
 	} else {
-		var aurErr error
-		aurResults, aurErr = aur.SearchAUR(packageName)
-		if aurErr != nil {
-			fmt.Printf("Error searching AUR: %v\n", aurErr)
-		}
-		if len(aurResults) > 0 {
-			displayAURResults(aurResults)
-			hasAUR = true
+		resolvedList = lookup.ResolveBatch(validArgs)
+	}
+
+	var officialPlan []installPlanItem
+	var aurPlan []installPlanItem
+
+	for _, res := range resolvedList {
+		if res.ChosenSource == resolve.SourceOfficial && res.PacmanResult != nil {
+			officialPlan = append(officialPlan, installPlanItem{
+				Name:         res.PacmanResult.Name,
+				Source:       resolve.SourceOfficial,
+				PacmanResult: res.PacmanResult,
+			})
+		} else if res.ChosenSource == resolve.SourceAUR && res.AURResult != nil {
+			aurPlan = append(aurPlan, installPlanItem{
+				Name:      res.AURResult.Name,
+				Source:    resolve.SourceAUR,
+				AURResult: res.AURResult,
+			})
 		} else {
-			fmt.Printf("\nNo results found for \"%s\" in official repositories or the AUR.\n", packageName)
-			return
-		}
-	}
+			// Package not found by exact match
+			if len(validArgs) == 1 {
+				// Offer fuzzy search / Did you mean suggestions for single-package installs
+				var pacmanResults []resolve.PacmanResult
+				var aurResults []resolve.AURResult
 
-	fmt.Print("\nEnter the package name you would like to install (or press Enter to skip): ")
-	detailName, _ := reader.ReadString('\n')
-	detailName = strings.TrimSpace(detailName)
-
-	if detailName == "" {
-		return
-	}
-
-	if pkg, found := lookupPacmanPackage(pacmanResults, detailName); found {
-		displayPacmanSummary(&pkg)
-		fmt.Print("\nProceed with install? (y/N): ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
-			err := pacman.InstallPacman(&pkg)
-			if err != nil {
-				fmt.Printf("Error: installation failed: %v\n", err)
-			}
-		}
-		return
-	}
-
-	if hasAUR {
-		if pkg, found := lookupAURPackage(aurResults, detailName); found {
-			displayAURSummary(&pkg)
-			fmt.Print("\nProceed with install? (y/N): ")
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input == "y" || input == "yes" {
-				fmt.Printf("\nInstalling %s from AUR...\n", pkg.Name)
-				err := aur.InstallAUR(pkg.Name)
-				if err != nil {
-					fmt.Printf("Error: %v\n", err)
+				if sourceFilter == "official" || sourceFilter == "repo" {
+					pacmanResults, _ = pacman.SearchPacman(res.Query)
+				} else if sourceFilter == "aur" {
+					aurResults, _ = aur.SearchAUR(res.Query)
+				} else {
+					pacmanResults, aurResults, _, _ = lookup.SearchBoth(res.Query)
 				}
+
+				var suggestions []ui.SelectionItem
+				idxCounter := 1
+
+				pacmanMap := make(map[int]resolve.PacmanResult)
+				aurMap := make(map[int]resolve.AURResult)
+
+				if len(pacmanResults) > 0 {
+					for i, r := range pacmanResults {
+						if i >= 3 {
+							break
+						}
+						suggestions = append(suggestions, ui.SelectionItem{
+							Index:       idxCounter,
+							Name:        r.Name,
+							SourceLabel: "official: " + r.Repository,
+							Version:     r.Version,
+							Description: r.Description,
+						})
+						pacmanMap[idxCounter] = r
+						idxCounter++
+					}
+				}
+
+				if len(aurResults) > 0 {
+					for i, r := range aurResults {
+						if i >= 3 {
+							break
+						}
+						suggestions = append(suggestions, ui.SelectionItem{
+							Index:       idxCounter,
+							Name:        r.Name,
+							SourceLabel: "AUR",
+							Version:     r.Version,
+							Description: r.Description,
+						})
+						aurMap[idxCounter] = r
+						idxCounter++
+					}
+				}
+
+				if len(suggestions) == 0 {
+					fmt.Printf("\n\"%s\" was not found in specified sources.\n", res.Query)
+					return
+				}
+
+				fmt.Printf("\n\"%s\" was not found. Did you mean:\n", res.Query)
+				for _, item := range suggestions {
+					fmt.Printf("  [%d] %s (%s) - %s\n", item.Index, item.Name, item.SourceLabel, item.Version)
+				}
+
+				_, selected := ui.PromptSelection(reader, "\nEnter number or package name to install (or press Enter to skip): ", suggestions)
+				if selected == nil {
+					fmt.Println("Install cancelled.")
+					return
+				}
+
+				if pPkg, ok := pacmanMap[selected.Index]; ok {
+					pPkgCopy := pPkg
+					officialPlan = append(officialPlan, installPlanItem{
+						Name:         pPkgCopy.Name,
+						Source:       resolve.SourceOfficial,
+						PacmanResult: &pPkgCopy,
+					})
+				} else if aPkg, ok := aurMap[selected.Index]; ok {
+					aPkgCopy := aPkg
+					aurPlan = append(aurPlan, installPlanItem{
+						Name:      aPkgCopy.Name,
+						Source:    resolve.SourceAUR,
+						AURResult: &aPkgCopy,
+					})
+				}
+			} else {
+				fmt.Printf("Warning: package \"%s\" was not found in specified sources; skipping.\n", res.Query)
 			}
-			return
 		}
 	}
 
-	fmt.Printf("Could not find package \"%s\" in the search results.\n", detailName)
-}
+	plan := append(officialPlan, aurPlan...)
 
-func displayPacmanSummary(pkg *resolve.PacmanResult) {
-	fmt.Printf("\n  %s/%s  %s\n", pkg.Repository, pkg.Name, pkg.Version)
-	if pkg.Description != "" {
-		fmt.Printf("  %s\n", pkg.Description)
+	if len(plan) == 0 {
+		return
 	}
-}
 
-func displayAURSummary(pkg *resolve.AURResult) {
-	fmt.Printf("\n  %s  %s\n", pkg.Name, pkg.Version)
-	if pkg.Description != "" {
-		fmt.Printf("  %s\n", pkg.Description)
+	fmt.Println("\nAurora is about to install:")
+	for _, item := range plan {
+		if item.Source == resolve.SourceOfficial {
+			fmt.Printf("  - %s (official: %s)\n", item.Name, item.PacmanResult.Repository)
+		} else {
+			votes := 0
+			if item.AURResult != nil {
+				votes = item.AURResult.NumVotes
+			}
+			fmt.Printf("  - %s (AUR, %d votes)\n", item.Name, votes)
+		}
 	}
-	fmt.Printf("  Votes: %d\n", pkg.NumVotes)
-	fmt.Println("\nNote: installing from AUR means Aurora will clone the build files and build locally using makepkg.")
+
+	if !ui.ConfirmAction(reader, "\nProceed with installation?", yesFlag) {
+		fmt.Println("Install cancelled.")
+		return
+	}
+
+	if len(officialPlan) > 0 {
+		var officialNames []string
+		for _, item := range officialPlan {
+			officialNames = append(officialNames, item.Name)
+		}
+		err := pacman.InstallPacmanBatch(officialNames)
+		if err != nil {
+			fmt.Printf("Error installing official packages: %v\n", err)
+		}
+	}
+
+	for _, item := range aurPlan {
+		// PKGBUILD inspection support (Paru-style power)
+		if installInspectFlag {
+			fmt.Printf("\n--- Inspecting PKGBUILD for %s ---\n", item.Name)
+			content, err := aur.FetchPKGBUILD(item.Name)
+			if err == nil {
+				lines := strings.Split(content, "\n")
+				for i, l := range lines {
+					fmt.Printf("%4d | %s\n", i+1, l)
+				}
+				if !ui.ConfirmAction(reader, fmt.Sprintf("Continue building %s after PKGBUILD review?", item.Name), yesFlag) {
+					fmt.Printf("Skipped building %s.\n", item.Name)
+					continue
+				}
+			} else {
+				fmt.Printf("Warning: could not fetch PKGBUILD for review: %v\n", err)
+			}
+		}
+
+		fmt.Printf("\nInstalling %s from AUR...\n", item.Name)
+		err := aur.InstallAUR(item.Name)
+		if err != nil {
+			fmt.Printf("Error installing %s from AUR: %v\n", item.Name, err)
+		}
+	}
 }
 
 var installCmd = &cobra.Command{
-	Use:   "install [package]",
-	Short: "Installs the specified package from official repositories or AUR",
-	Run:   install,
+	Use:   "install <package> [package...]",
+	Short: "Installs specified packages from official repositories or AUR",
+	Long: `Installs packages from official repositories (preferred) or the Arch User Repository.
+Supports batch installation, automatic Did-You-Mean suggestions, source filtering, and PKGBUILD inspection.
+
+Examples:
+  aurora install neovim git ripgrep
+  aurora install yay --from aur
+  aurora install paru --inspect`,
+	Run: install,
 }
 
 func init() {
+	installCmd.Flags().StringVar(&installFromFlag, "from", "any", "filter source: 'official' or 'aur'")
+	installCmd.Flags().BoolVarP(&installOfficialFlag, "official", "O", false, "install only from official repositories")
+	installCmd.Flags().BoolVarP(&installAURFlag, "aur", "A", false, "install only from the Arch User Repository")
+	installCmd.Flags().BoolVarP(&installInspectFlag, "inspect", "i", false, "review PKGBUILD script before building AUR packages")
 	rootCmd.AddCommand(installCmd)
 }

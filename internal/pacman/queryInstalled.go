@@ -9,6 +9,9 @@ func SearchInstalled(query string) ([]string, error) {
 	cmd := exec.Command("pacman", "-Qq")
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, nil
+		}
 		return nil, err
 	}
 

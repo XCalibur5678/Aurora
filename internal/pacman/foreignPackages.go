@@ -9,6 +9,9 @@ func GetForeignPackages() (map[string]string, error) {
 	cmd := exec.Command("pacman", "-Qm")
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return make(map[string]string), nil
+		}
 		return nil, err
 	}
 

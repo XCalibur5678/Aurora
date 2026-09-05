@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
+	"github.com/abhigyan-chatterjee/aurora/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -17,66 +18,127 @@ func remove(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	pkgQuery := args[0]
 	reader := bufio.NewReader(os.Stdin)
 
-	matches, err := pacman.SearchInstalled(pkgQuery)
-	if err != nil {
-		fmt.Printf("Error checking installed packages: %v\n", err)
+	var validArgs []string
+	seen := make(map[string]bool)
+	for _, arg := range args {
+		if !ui.IsValidPkgName(arg) {
+			fmt.Printf("Warning: invalid package name format: %s\n", arg)
+			continue
+		}
+		norm := strings.ToLower(arg)
+		if seen[norm] {
+			continue
+		}
+		seen[norm] = true
+		validArgs = append(validArgs, arg)
+	}
+
+	if len(validArgs) == 0 {
 		return
 	}
 
-	var pkgName string
+	var removeList []string
+	removeSeen := make(map[string]bool)
 
-	if len(matches) == 0 {
-		fmt.Printf("No installed package found matching \"%s\".\n", pkgQuery)
-		return
-	} else if len(matches) > 1 {
-		fmt.Printf("Found multiple packages matching \"%s\":\n", pkgQuery)
-		for _, m := range matches {
-			fmt.Printf("  - %s\n", m)
+	for _, pkgQuery := range validArgs {
+		matches, err := pacman.SearchInstalled(pkgQuery)
+		if err != nil {
+			fmt.Printf("Error checking installed packages for \"%s\": %v\n", pkgQuery, err)
+			continue
 		}
-		fmt.Print("\nEnter the exact package name to remove: ")
-		input, _ := reader.ReadString('\n')
-		pkgName = strings.TrimSpace(input)
 
-		found := false
+		if len(matches) == 0 {
+			fmt.Printf("No installed package found matching \"%s\".\n", pkgQuery)
+			continue
+		}
+
+		var exactMatch string
+		hasExact := false
 		for _, m := range matches {
-			if m == pkgName {
-				found = true
+			if strings.EqualFold(m, pkgQuery) {
+				exactMatch = m
+				hasExact = true
 				break
 			}
 		}
-		if !found {
-			fmt.Printf("\"%s\" does not match any of the listed packages.\n", pkgName)
-			return
+
+		if hasExact {
+			norm := strings.ToLower(exactMatch)
+			if !removeSeen[norm] {
+				removeSeen[norm] = true
+				removeList = append(removeList, exactMatch)
+			}
+		} else if len(matches) == 1 {
+			pkgName := matches[0]
+			norm := strings.ToLower(pkgName)
+			if !removeSeen[norm] {
+				removeSeen[norm] = true
+				removeList = append(removeList, pkgName)
+			}
+		} else {
+			if len(validArgs) == 1 {
+				fmt.Printf("\nFound multiple packages matching \"%s\":\n", pkgQuery)
+				var items []ui.SelectionItem
+				for i, m := range matches {
+					items = append(items, ui.SelectionItem{
+						Index: mIndex(i),
+						Name:  m,
+					})
+					fmt.Printf("  [%d] %s\n", i+1, m)
+				}
+				_, selected := ui.PromptSelection(reader, "\nEnter item number or exact package name to remove (or press Enter to skip): ", items)
+				if selected == nil {
+					fmt.Println("Removal cancelled.")
+					return
+				}
+				if !removeSeen[selected.Name] {
+					removeSeen[selected.Name] = true
+					removeList = append(removeList, selected.Name)
+				}
+			} else {
+				fmt.Printf("Warning: multiple packages match \"%s\" — run `aurora remove <exact>` to disambiguate; skipping.\n", pkgQuery)
+			}
 		}
-	} else {
-		pkgName = matches[0]
 	}
 
-	fmt.Printf("\nAurora is about to remove: %s\n", pkgName)
-	fmt.Print("Are you sure? (y/N): ")
+	if len(removeList) == 0 {
+		return
+	}
 
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(strings.ToLower(input))
-	if input != "y" && input != "yes" {
+	fmt.Println("\nAurora is about to remove:")
+	for _, pkg := range removeList {
+		fmt.Printf("  - %s\n", pkg)
+	}
+
+	if !ui.ConfirmAction(reader, "\nAre you sure?", yesFlag) {
 		fmt.Println("Removal cancelled.")
 		return
 	}
 
-	err = pacman.RemovePacman(pkgName)
+	err := pacman.RemovePacman(removeList...)
 	if err != nil {
-		fmt.Printf("Error: removal failed: %v\n", err)
+		fmt.Printf("Error removing packages: %v\n", err)
 	} else {
-		fmt.Printf("Successfully removed %s.\n", pkgName)
+		fmt.Printf("Successfully removed: %s\n", strings.Join(removeList, ", "))
 	}
 }
 
+func mIndex(i int) int {
+	return i + 1
+}
+
 var removeCmd = &cobra.Command{
-	Use:   "remove [package]",
-	Short: "Removes the specified package from the system",
-	Run:   remove,
+	Use:   "remove <package> [package...]",
+	Short: "Removes specified packages from the system",
+	Long: `Removes packages safely by running 'sudo pacman -Rns --noconfirm'.
+This removes the target package as well as any unneeded dependencies left behind.
+
+Examples:
+  aurora remove neovim
+  aurora remove neovim git`,
+	Run: remove,
 }
 
 func init() {

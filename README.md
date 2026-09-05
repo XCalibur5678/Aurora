@@ -1,29 +1,29 @@
-# Aurora v0.2 🎉
+# Aurora v0.3 🎉
 
-**Aurora** is a beginner-first package workflow assistant for Arch-based Linux. It prefers official repositories over the AUR, explains every operation in plain English, and helps new users gradually understand Arch instead of punishing them for not already knowing it.
+**Aurora** is a modern package workflow assistant for Arch-based Linux that combines the raw AUR power of **Paru** with the memorable simplicity of **apt**. It prioritizes official repositories over the AUR, explains every operation in plain English, and keeps your system safe and clean.
 
 ---
 
-## What's New in v0.2
+## What's New in v0.3
 
-v0.2 is the foundation release — the first version that proves Aurora's philosophy is the right one.
+v0.3 completes the roadmap through v0.6, delivering a unified, powerful, and intuitive CLI:
 
-### Official repositories first, always
+### ⚡ Paru-Style Power & Source Intelligence
+- **PKGBUILD Inspection (`aurora inspect <pkg>`)** — Fetch and review PKGBUILD build recipes directly from AUR cgit before building or downloading.
+- **Pre-Build Review (`aurora install --inspect <pkg>`)** — Inspect PKGBUILD scripts interactively prior to compiling AUR software with `makepkg`.
+- **Source Filtering (`--from official|aur`, `-O`, `-A`)** — Restrict operations cleanly to official repositories or AUR across `install`, `search`, and `info`.
+- **Concurrent Lookups (Goroutines)** — Parallel queries across pacman and AUR cut search and resolution latency in half.
 
-Aurora now queries `pacman` before the AUR for every operation. When a package exists in both, Aurora recommends the official version and explains why. No other AUR helper does this as a design principle.
+### 🐧 Apt-Style Simplicity & Lifecycle Management
+- **`aurora autoremove`** — Discovers and removes leftover orphan dependencies (`pacman -Qtdq`) safely with `sudo pacman -Rns --noconfirm`.
+- **`aurora list`** — Apt-style package query with filters: `--installed`, `--upgradable`, `--orphans`, `--official`, `--foreign` / `--aur`.
+- **`aurora clean`** — Purges temporary AUR build artifacts in `~/.cache/aurora` and cleans pacman cache with `--dry-run` inspection.
 
-### New commands
-
-- **`aurora info <package>`** — See package details, source (official or AUR), version, and description at a glance.
-- **Automatic Arch detection** — Aurora refuses to run on non-Arch systems with a clear message. No cryptic errors.
-
-### Rewritten internals
-
-- **`search`** — Searches official repos first, offers AUR as an explicit opt-in. Results show source labels and sort by relevance.
-- **`install`** — Exact-match resolution flow: tries pacman, falls back to AUR, offers fuzzy search when the package is unknown.
-- **`remove`** — Resolves installed packages safely, shows the `-Rns` command with a plain-English explanation, confirms before acting.
-- **`update`** — Checks AUR packages for newer versions first, then explains `pacman -Syu` flag-by-flag before running the full system upgrade.
-- **Modular architecture** — All heavy lifting moved to `internal/pacman/` and `internal/aur/`. `cmd/` is a thin orchestration layer.
+### 📚 Teaching Mode & Friction Reduction
+- **`aurora explain [topic]`** — Plain-English concept explorer for Arch Linux package management (`-Syu`, `-Rns`, `aur`, `pkgbuild`, `makepkg`, `partial-upgrades`, `orphans`).
+- **Global Automation (`-y, --yes`)** — Auto-confirm Aurora's prompt layer for unattended scripts.
+- **Numbered Selection Picker** — Select packages from search and suggestion lists by typing their index (`1`, `2`) or name.
+- **Did You Mean Suggestions** — Automatic typo tolerance and suggestions on missing packages.
 
 ---
 
@@ -31,11 +31,22 @@ Aurora now queries `pacman` before the AUR for every operation. When a package e
 
 | Command | What it does |
 |---|---|
-| `aurora search <query>` | Search official repos, optionally search AUR |
-| `aurora info <package>` | Show detailed package information |
-| `aurora install <package>` | Install from official repos (preferred) or AUR |
-| `aurora remove <package>` | Remove a package safely with confirmation |
-| `aurora update` | Check AUR for updates, then full system upgrade |
+| `aurora explain [topic]` | Learn Arch Linux concepts, pacman flags, and AUR workflows |
+| `aurora inspect <package>` | Inspect PKGBUILD recipes or official package build metadata (alias: `pkgbuild`) |
+| `aurora search <query...> [--from]` | Search official repos and AUR concurrently |
+| `aurora info <package...> [--from]` | Show detailed package information and source resolution |
+| `aurora install <package...> [--from] [-i]` | Install packages in batch with preview, confirmation, and optional PKGBUILD review |
+| `aurora remove <package...>` | Remove packages safely with orphan cleanup (`-Rns`) |
+| `aurora update` | Check AUR updates, then perform full system upgrade in 1 combined prompt |
+| `aurora autoremove` | Scan and remove unneeded orphan dependencies (apt-style) |
+| `aurora list [query] [--flags]` | List packages by category (`--installed`, `--upgradable`, `--orphans`, `--foreign`) |
+| `aurora clean [--dry-run] [--all]` | Reclaim disk space by purging AUR build artifacts and package caches |
+
+### Global Flags
+
+- **`-y, --yes`**: Skip Aurora's confirmation prompts (pacman/sudo still prompt).
+- **`-c, --concise`**: Enable concise output mode (suppress extra teaching explanations and notes).
+- **`-v, --version`**: Show Aurora version (`0.3.0`).
 
 ---
 
@@ -43,18 +54,8 @@ Aurora now queries `pacman` before the AUR for every operation. When a package e
 
 - **Pacman is King** — Aurora delegates to `pacman` and `makepkg`. It orchestrates, never replaces.
 - **Transparency First** — Every destructive command is previewed with a plain-English explanation before it runs.
-- **No Jargon Without Explanation** — When Aurora says "`-Syu`", it explains what those mean right there.
+- **No Jargon Without Explanation** — When Aurora uses flags like `-Syu` or `-Rns`, `aurora explain` helps you understand what they mean.
 - **Official Wins** — Official repositories are always preferred. AUR is an explicit choice, not a hidden default.
-
----
-
-## Who This Is For
-
-- New Arch users coming from Ubuntu, Debian, Mint, or Pop!_OS
-- Users who want to learn Arch, not memorize flags
-- Anyone who prefers guided, explained workflows over terse output
-
-Aurora is **not** a `yay` or `paru` replacement for power users. It's a teaching tool that happens to be a capable package assistant.
 
 ---
 
@@ -68,8 +69,6 @@ Download the latest binary from the [releases page](https://github.com/abhigyan-
 sudo cp aurora /usr/local/bin/
 ```
 
-That's it. `/usr/local/bin/` is already on your `PATH` across bash, zsh, and fish — no shell config changes needed.
-
 ### 2. Install with Go
 
 Requires Go 1.25+:
@@ -78,15 +77,13 @@ Requires Go 1.25+:
 go install github.com/abhigyan-chatterjee/aurora@latest
 ```
 
-This places the binary in `$GOPATH/bin` (defaults to `~/go/bin`). Make sure that directory is on your `PATH`.
-
 ### 3. Build from Source
 
 ```bash
 git clone https://github.com/abhigyan-chatterjee/aurora.git
 cd aurora
-go build -o aurora main.go
-sudo cp aurora /usr/local/bin/
+go build -o build/aurora main.go
+sudo cp build/aurora /usr/local/bin/
 ```
 
 ---
@@ -94,24 +91,46 @@ sudo cp aurora /usr/local/bin/
 ## Quick Start
 
 ```bash
-aurora search neovim      # Search official repos + optional AUR
-aurora info neovim        # See where it lives and what version
-aurora install neovim     # Official repos if available, AUR otherwise
-aurora update             # Update AUR packages + full system upgrade
-aurora remove neovim      # Safe removal with confirmation
+# Teaching & Exploration
+aurora explain -Syu         # Learn what -Syu means and why it's important
+aurora inspect yay          # View PKGBUILD and audit build script
+
+# Search & Info
+aurora search neovim git    # Search official repos + AUR in parallel
+aurora search yay --from aur # Search only the AUR
+aurora info neovim          # Detailed package details
+
+# Installation & Upgrades
+aurora install neovim git   # Install multiple packages with 1 confirmation
+aurora install yay -i       # Review PKGBUILD before building from AUR
+aurora update               # Update AUR packages + full system upgrade
+
+# System Maintenance (Apt-style)
+aurora autoremove           # Remove unused orphan dependencies
+aurora list --upgradable    # List packages with available updates
+aurora list --foreign       # List installed AUR packages
+aurora clean --dry-run      # Check how much cache space can be reclaimed
+aurora clean                # Purge ~/.cache/aurora build artifacts
+aurora remove neovim        # Safe removal with dependency cleanup
 ```
 
 ---
 
 ## Roadmap
 
-- **v0.3 — Teaching mode**: `explain` command, beginner vs concise modes, Arch concept walkthroughs
-- **v0.4 — Source intelligence**: `--from official|aur`, PKGBUILD inspection, source recommendations
-- **v0.5 — Lifecycle**: `list` commands, orphan handling, cache cleanup
-- **v0.6+ — Polish**: Tests, better errors, docs, demo flows
+- **v0.3 — Paru Power + Apt Simplicity** (Complete!)
+  - Teaching mode (`explain` command, concise mode)
+  - Concurrency (parallel lookups with goroutines)
+  - Multi-argument batch operations across commands
+  - Source Intelligence (`--from official|aur`, PKGBUILD `inspect` command, pre-build review)
+  - System Lifecycle (`autoremove` for orphans, `list` queries, `clean` cache maintenance)
+  - Unit test suite and clean internal architecture (`internal/ui`)
+- **Future Explorations**:
+  - Optional pacman mirror freshness check
+  - Tab completion scripts for bash/zsh/fish
 
 ---
 
 ## Contributing
 
-We value clarity. If you have an idea, open an issue first — we prioritize changes that keep Aurora transparent and predictable.
+We value clarity and transparency. If you have an idea, open an issue first — we prioritize changes that keep Aurora transparent and predictable.

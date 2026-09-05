@@ -1,5 +1,24 @@
 package resolve
 
+type PackageSource int
+
+const (
+	SourceUnknown PackageSource = iota
+	SourceOfficial
+	SourceAUR
+)
+
+func (s PackageSource) String() string {
+	switch s {
+	case SourceOfficial:
+		return "official"
+	case SourceAUR:
+		return "AUR"
+	default:
+		return "unknown"
+	}
+}
+
 type AURResult struct {
 	Name         string
 	Version      string
@@ -14,4 +33,11 @@ type PacmanResult struct {
 	Version     string
 	Description string
 	Repository  string
+}
+
+type ResolvedPackage struct {
+	Query        string
+	PacmanResult *PacmanResult
+	AURResult    *AURResult
+	ChosenSource PackageSource
 }

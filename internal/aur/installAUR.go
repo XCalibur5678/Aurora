@@ -10,14 +10,11 @@ import (
 )
 
 func isValidPackageName(name string) bool {
-	if name == "" || name == "." || name == ".." {
-		return false
-	}
-	if strings.Contains(name, "..") {
+	if name == "" || strings.HasPrefix(name, "-") || strings.HasPrefix(name, ".") || strings.Contains(name, "..") {
 		return false
 	}
 	for _, c := range name {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_') {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '+' || c == '@') {
 			return false
 		}
 	}
@@ -64,7 +61,7 @@ func InstallAUR(packageName string) error {
 	}
 
 	fmt.Println("Building package...")
-	buildCmd := exec.Command("makepkg", "-si")
+	buildCmd := exec.Command("makepkg", "-si", "--noconfirm")
 	buildCmd.Dir = pkgDir
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr

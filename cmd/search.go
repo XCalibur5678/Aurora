@@ -7,10 +7,18 @@ import (
 	"strings"
 
 	"github.com/abhigyan-chatterjee/aurora/internal/aur"
+	"github.com/abhigyan-chatterjee/aurora/internal/lookup"
 	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
 	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/ui"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	searchFromFlag     string
+	searchOfficialFlag bool
+	searchAURFlag      bool
 )
 
 func search(cmd *cobra.Command, args []string) {
@@ -19,112 +27,139 @@ func search(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	packageName := args[0]
 	reader := bufio.NewReader(os.Stdin)
 
-	pacmanResults, pacmanErr := pacman.SearchPacman(packageName)
-	if pacmanErr != nil {
-		fmt.Printf("Error searching official repositories: %v\n", pacmanErr)
+	// Evaluate source filter
+	sourceFilter := strings.ToLower(strings.TrimSpace(searchFromFlag))
+	if searchOfficialFlag {
+		sourceFilter = "official"
+	} else if searchAURFlag {
+		sourceFilter = "aur"
 	}
 
-	aurResults := []resolve.AURResult{}
-	hasAUR := false
-
-	if len(pacmanResults) > 0 {
-		displayPacmanResults(pacmanResults)
-		fmt.Println("\nOfficial repositories are the recommended source as packages are prebuilt and maintained as part of the normal Arch package flow.")
-		fmt.Print("\nWould you also like to search the AUR? (y/N): ")
-
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
-			var aurErr error
-			aurResults, aurErr = aur.SearchAUR(packageName)
-			if aurErr != nil {
-				fmt.Printf("Error searching AUR: %v\n", aurErr)
-			}
-			if len(aurResults) > 0 {
-				displayAURResults(aurResults)
-				hasAUR = true
-			} else {
-				fmt.Println("\nNo results found in the AUR.")
-			}
+	var validArgs []string
+	seen := make(map[string]bool)
+	for _, arg := range args {
+		if !ui.IsValidPkgName(arg) {
+			fmt.Printf("Warning: invalid package name format: %s\n", arg)
+			continue
 		}
-	} else {
-		var aurErr error
-		aurResults, aurErr = aur.SearchAUR(packageName)
-		if aurErr != nil {
-			fmt.Printf("Error searching AUR: %v\n", aurErr)
+		norm := strings.ToLower(arg)
+		if seen[norm] {
+			continue
 		}
-		if len(aurResults) > 0 {
-			displayAURResults(aurResults)
-			hasAUR = true
-		} else {
-			fmt.Printf("\nNo results found for \"%s\" in official repositories or the AUR.\n", packageName)
-			return
-		}
+		seen[norm] = true
+		validArgs = append(validArgs, arg)
 	}
 
-	fmt.Print("\nWould you like to see details for a specific package? (Enter package name, or press Enter to skip): ")
-	detailName, _ := reader.ReadString('\n')
-	detailName = strings.TrimSpace(detailName)
-
-	if detailName == "" {
+	if len(validArgs) == 0 {
 		return
 	}
 
-	if pkg, found := lookupPacmanPackage(pacmanResults, detailName); found {
+	var allItems []ui.SelectionItem
+	pacmanPkgMap := make(map[int]resolve.PacmanResult)
+	aurPkgMap := make(map[int]resolve.AURResult)
+
+	itemCounter := 1
+
+	for _, query := range validArgs {
+		if len(validArgs) > 1 {
+			fmt.Printf("\n--- Search: %s ---\n", query)
+		} else {
+			fmt.Printf("\nResults for \"%s\"\n", query)
+		}
+
+		var pacmanResults []resolve.PacmanResult
+		var aurResults []resolve.AURResult
+		var pacmanErr, aurErr error
+
+		if sourceFilter == "official" || sourceFilter == "repo" {
+			pacmanResults, pacmanErr = pacman.SearchPacman(query)
+		} else if sourceFilter == "aur" {
+			aurResults, aurErr = aur.SearchAUR(query)
+		} else {
+			pacmanResults, aurResults, pacmanErr, aurErr = lookup.SearchBoth(query)
+		}
+
+		if pacmanErr != nil {
+			fmt.Printf("Warning (official repos): %v\n", pacmanErr)
+		}
+		if aurErr != nil {
+			fmt.Printf("Warning (AUR): %v\n", aurErr)
+		}
+
+		if len(pacmanResults) == 0 && len(aurResults) == 0 {
+			if pacmanErr == nil && aurErr == nil {
+				fmt.Printf("No results found for \"%s\" in specified sources.\n", query)
+			}
+			continue
+		}
+
+		if len(pacmanResults) > 0 {
+			fmt.Println("\nOfficial repositories")
+			for _, r := range pacmanResults {
+				item := ui.SelectionItem{
+					Index:       itemCounter,
+					Name:        r.Name,
+					FullName:    r.Repository + "/" + r.Name,
+					SourceLabel: "official repositories",
+					Version:     r.Version,
+					Description: r.Description,
+				}
+				allItems = append(allItems, item)
+				pacmanPkgMap[itemCounter] = r
+
+				fmt.Printf("  [%d] %-25s %s\n", itemCounter, r.Repository+"/"+r.Name, r.Version)
+				if r.Description != "" {
+					fmt.Printf("      %s\n", r.Description)
+				}
+				itemCounter++
+			}
+		}
+
+		if len(aurResults) > 0 {
+			fmt.Println("\nAUR")
+			for i, r := range aurResults {
+				if i >= 10 {
+					break
+				}
+				item := ui.SelectionItem{
+					Index:       itemCounter,
+					Name:        r.Name,
+					SourceLabel: "AUR",
+					Version:     r.Version,
+					Description: r.Description,
+				}
+				allItems = append(allItems, item)
+				aurPkgMap[itemCounter] = r
+
+				fmt.Printf("  [%d] %-25s %s\n", itemCounter, r.Name, r.Version)
+				if r.Description != "" {
+					fmt.Printf("      %s\n", r.Description)
+				}
+				fmt.Printf("      Votes: %d\n", r.NumVotes)
+				itemCounter++
+			}
+		}
+	}
+
+	if len(allItems) == 0 {
+		return
+	}
+
+	prompt := "\nEnter item number or package name to view details (or press Enter to skip): "
+	_, selected := ui.PromptSelection(reader, prompt, allItems)
+	if selected == nil {
+		return
+	}
+
+	if pkg, found := pacmanPkgMap[selected.Index]; found {
 		displayPacmanDetail(pkg)
 		return
 	}
-	if hasAUR {
-		if pkg, found := lookupAURPackage(aurResults, detailName); found {
-			displayAURDetail(pkg)
-			return
-		}
-	}
-
-	fmt.Printf("Could not find package \"%s\" in the search results.\n", detailName)
-}
-
-func lookupPacmanPackage(results []resolve.PacmanResult, name string) (resolve.PacmanResult, bool) {
-	resultMap := make(map[string]resolve.PacmanResult, len(results))
-	for _, r := range results {
-		resultMap[r.Name] = r
-	}
-	pkg, exists := resultMap[name]
-	return pkg, exists
-}
-
-func lookupAURPackage(results []resolve.AURResult, name string) (resolve.AURResult, bool) {
-	resultMap := make(map[string]resolve.AURResult, len(results))
-	for _, r := range results {
-		resultMap[r.Name] = r
-	}
-	pkg, exists := resultMap[name]
-	return pkg, exists
-}
-
-func displayPacmanResults(results []resolve.PacmanResult) {
-	fmt.Printf("\nResults for \"%s\"\n", "search")
-	fmt.Println("\nOfficial repositories")
-	for _, r := range results {
-		fmt.Printf("  %-25s %s\n", r.Repository+"/"+r.Name, r.Version)
-		if r.Description != "" {
-			fmt.Printf("    %s\n", r.Description)
-		}
-	}
-}
-
-func displayAURResults(results []resolve.AURResult) {
-	fmt.Println("\nAUR")
-	for i, r := range results {
-		if i >= 10 {
-			break
-		}
-		fmt.Printf("  %-25s %s\n", r.Name, r.Version)
-		fmt.Printf("    %s\n", r.Description)
-		fmt.Printf("    Votes: %d\n", r.NumVotes)
+	if pkg, found := aurPkgMap[selected.Index]; found {
+		displayAURDetail(pkg)
+		return
 	}
 }
 
@@ -135,7 +170,9 @@ func displayPacmanDetail(pkg resolve.PacmanResult) {
 	fmt.Printf("Repository  : %s\n", pkg.Repository)
 	fmt.Printf("Description : %s\n", pkg.Description)
 	fmt.Printf("Source      : official repositories\n")
-	fmt.Println("\nRecommended: install via official repositories using pacman.")
+	if !conciseFlag {
+		fmt.Println("\nRecommended: install via official repositories using pacman.")
+	}
 }
 
 func displayAURDetail(pkg resolve.AURResult) {
@@ -146,15 +183,27 @@ func displayAURDetail(pkg resolve.AURResult) {
 	fmt.Printf("URL         : %s\n", pkg.URL)
 	fmt.Printf("Votes       : %d\n", pkg.NumVotes)
 	fmt.Printf("Source      : AUR\n")
-	fmt.Println("\nNote: installing from AUR means Aurora will clone the build files and build locally using makepkg.")
+	if !conciseFlag {
+		fmt.Println("\nNote: installing from AUR means Aurora will clone the build files and build locally using makepkg.")
+	}
 }
 
 var searchCmd = &cobra.Command{
-	Use:   "search [package]",
+	Use:   "search <query> [query...]",
 	Short: "Search for packages in official repositories and the AUR",
-	Run:   search,
+	Long: `Search queries official Arch Linux repositories and the Arch User Repository concurrently.
+Use --from to restrict searches to official repositories or AUR.
+
+Examples:
+  aurora search neovim git
+  aurora search neovim --from official
+  aurora search yay -A`,
+	Run: search,
 }
 
 func init() {
+	searchCmd.Flags().StringVar(&searchFromFlag, "from", "any", "filter source: 'official' or 'aur'")
+	searchCmd.Flags().BoolVarP(&searchOfficialFlag, "official", "O", false, "search only official repositories")
+	searchCmd.Flags().BoolVarP(&searchAURFlag, "aur", "A", false, "search only the Arch User Repository")
 	rootCmd.AddCommand(searchCmd)
 }

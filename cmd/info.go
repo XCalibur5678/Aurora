@@ -2,11 +2,21 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/abhigyan-chatterjee/aurora/internal/aur"
+	"github.com/abhigyan-chatterjee/aurora/internal/lookup"
 	"github.com/abhigyan-chatterjee/aurora/internal/pacman"
+	"github.com/abhigyan-chatterjee/aurora/internal/resolve"
+	"github.com/abhigyan-chatterjee/aurora/internal/ui"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	infoFromFlag     string
+	infoOfficialFlag bool
+	infoAURFlag      bool
 )
 
 func info(cmd *cobra.Command, args []string) {
@@ -15,51 +25,100 @@ func info(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	packageName := args[0]
-
-	pacmanPkg, pacmanErr := pacman.SearchPacmanExact(packageName)
-	if pacmanErr != nil {
-		fmt.Printf("Warning: could not query official repositories: %v\n", pacmanErr)
+	sourceFilter := strings.ToLower(strings.TrimSpace(infoFromFlag))
+	if infoOfficialFlag {
+		sourceFilter = "official"
+	} else if infoAURFlag {
+		sourceFilter = "aur"
 	}
-	if pacmanPkg != nil {
-		fmt.Printf("\n--- Package Details ---\n")
-		fmt.Printf("Name        : %s\n", pacmanPkg.Name)
-		fmt.Printf("Version     : %s\n", pacmanPkg.Version)
-		fmt.Printf("Repository  : %s\n", pacmanPkg.Repository)
-		fmt.Printf("Description : %s\n", pacmanPkg.Description)
-		fmt.Printf("Source      : official repositories\n")
+
+	var validArgs []string
+	seen := make(map[string]bool)
+	for _, arg := range args {
+		if !ui.IsValidPkgName(arg) {
+			fmt.Printf("Warning: invalid package name format: %s\n", arg)
+			continue
+		}
+		norm := strings.ToLower(arg)
+		if seen[norm] {
+			continue
+		}
+		seen[norm] = true
+		validArgs = append(validArgs, arg)
+	}
+
+	if len(validArgs) == 0 {
 		return
 	}
 
-	aurPkg, aurErr := aur.SearchAURExact(packageName)
-	if aurErr != nil {
-		fmt.Printf("Warning: could not query AUR: %v\n", aurErr)
-	}
-	if aurPkg != nil {
-		fmt.Printf("\n--- Package Details ---\n")
-		fmt.Printf("Name        : %s\n", aurPkg.Name)
-		fmt.Printf("Version     : %s\n", aurPkg.Version)
-		fmt.Printf("Description : %s\n", aurPkg.Description)
-		fmt.Printf("URL         : %s\n", aurPkg.URL)
-		fmt.Printf("Votes       : %d\n", aurPkg.NumVotes)
-		fmt.Printf("Source      : AUR\n")
-		fmt.Println("\nNote: installing from AUR means Aurora will clone the build files and build locally using makepkg.")
-		return
-	}
+	var resolvedList []*resolve.ResolvedPackage
 
-	if pacmanErr != nil || aurErr != nil {
-		fmt.Printf("Could not confirm whether \"%s\" exists due to the errors above.\n", packageName)
+	if sourceFilter == "official" || sourceFilter == "repo" {
+		for _, q := range validArgs {
+			pPkg, _ := pacman.SearchPacmanExact(q)
+			res := &resolve.ResolvedPackage{Query: q, ChosenSource: resolve.SourceUnknown}
+			if pPkg != nil {
+				res.PacmanResult = pPkg
+				res.ChosenSource = resolve.SourceOfficial
+			}
+			resolvedList = append(resolvedList, res)
+		}
+	} else if sourceFilter == "aur" {
+		for _, q := range validArgs {
+			aPkg, _ := aur.SearchAURExact(q)
+			res := &resolve.ResolvedPackage{Query: q, ChosenSource: resolve.SourceUnknown}
+			if aPkg != nil {
+				res.AURResult = aPkg
+				res.ChosenSource = resolve.SourceAUR
+			}
+			resolvedList = append(resolvedList, res)
+		}
 	} else {
-		fmt.Printf("Package \"%s\" was not found in official repositories or the AUR.\n", packageName)
+		resolvedList = lookup.ResolveBatch(validArgs)
+	}
+
+	for _, resolved := range resolvedList {
+		if resolved.ChosenSource == resolve.SourceOfficial && resolved.PacmanResult != nil {
+			pkg := resolved.PacmanResult
+			fmt.Printf("\n--- Package Details: %s ---\n", pkg.Name)
+			fmt.Printf("Name        : %s\n", pkg.Name)
+			fmt.Printf("Version     : %s\n", pkg.Version)
+			fmt.Printf("Repository  : %s\n", pkg.Repository)
+			fmt.Printf("Description : %s\n", pkg.Description)
+			fmt.Printf("Source      : official repositories\n")
+		} else if resolved.ChosenSource == resolve.SourceAUR && resolved.AURResult != nil {
+			pkg := resolved.AURResult
+			fmt.Printf("\n--- Package Details: %s ---\n", pkg.Name)
+			fmt.Printf("Name        : %s\n", pkg.Name)
+			fmt.Printf("Version     : %s\n", pkg.Version)
+			fmt.Printf("Description : %s\n", pkg.Description)
+			fmt.Printf("URL         : %s\n", pkg.URL)
+			fmt.Printf("Votes       : %d\n", pkg.NumVotes)
+			fmt.Printf("Source      : AUR\n")
+			if !conciseFlag {
+				fmt.Println("\nNote: installing from AUR means Aurora will clone the build files and build locally using makepkg.")
+			}
+		} else {
+			fmt.Printf("\nPackage \"%s\" was not found in specified sources.\n", resolved.Query)
+		}
 	}
 }
 
 var infoCmd = &cobra.Command{
-	Use:   "info [package]",
+	Use:   "info <package> [package...]",
 	Short: "Show detailed information about a package",
-	Run:   info,
+	Long: `Display detailed information about packages from official repositories or the AUR.
+Use --from to restrict information lookups to official repositories or AUR.
+
+Examples:
+  aurora info neovim
+  aurora info yay --from aur`,
+	Run: info,
 }
 
 func init() {
+	infoCmd.Flags().StringVar(&infoFromFlag, "from", "any", "filter source: 'official' or 'aur'")
+	infoCmd.Flags().BoolVarP(&infoOfficialFlag, "official", "O", false, "inspect only official repositories")
+	infoCmd.Flags().BoolVarP(&infoAURFlag, "aur", "A", false, "inspect only the Arch User Repository")
 	rootCmd.AddCommand(infoCmd)
 }
